@@ -1,193 +1,245 @@
-'use client'; // Needed for interactive filters/animations
-import { useState, useEffect } from 'react';
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getCategoryPageData } from '@/app/actions';
-import Link from 'next/link';
 import Navbar from '@/components/Navbar';
-import { motion } from 'framer-motion';
-import { SlidersHorizontal, Search, ArrowRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { SlidersHorizontal, Search, X, Loader2 } from 'lucide-react';
+import ProductCard from '@/components/ProductCard'; 
+
+// --- INLINE DEBOUNCE HOOK ---
+function useDebounceValue(value, delay) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
 
 export default function CategoryPage({ params }) {
+  // State
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true); // For first load only
+  const [isFiltering, setIsFiltering] = useState(false);      // For subsequent updates
   
   // Filter States
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
 
-  // 1. Fetch Data
-  const fetchData = async () => {
-    setLoading(true);
-    // Unwrap params properly for Next.js 15+ if needed, or use directly
-    const slug = (await params).slug; 
-    
-    // Pass filters to server action
-    const filterParams = { 
-      search: searchQuery, 
-      minPrice: priceRange.min, 
-      maxPrice: priceRange.max 
-    };
-    
-    const result = await getCategoryPageData(slug, filterParams);
-    setData(result);
-    setLoading(false);
-  };
+  // Debounce Search
+  const debouncedSearch = useDebounceValue(searchQuery, 400);
+  
+  // Keep track if we mounted to avoid double fetch
+  const isMounted = useRef(false);
 
+  // 1. Fetch Data Function
+  const fetchData = useCallback(async (isInitial = false) => {
+    if (isInitial) setInitialLoading(true);
+    else setIsFiltering(true);
+
+    try {
+        const resolvedParams = await params;
+        const slug = resolvedParams.slug; 
+        
+        const filterParams = { 
+        search: debouncedSearch, 
+        minPrice: priceRange.min, 
+        maxPrice: priceRange.max 
+        };
+        
+        const result = await getCategoryPageData(slug, filterParams);
+        setData(result);
+    } catch (error) {
+        console.error("Fetch error:", error);
+    } finally {
+        setInitialLoading(false);
+        setIsFiltering(false);
+    }
+  }, [params, debouncedSearch, priceRange.min, priceRange.max]);
+
+  // 2. Trigger Fetch
   useEffect(() => {
-    fetchData();
-  }, [params]); // Initial load
+    // Prevent double fetch on strict mode, but ensure it runs on debounce change
+    fetchData(data === null); 
+  }, [fetchData]);
 
-  // Handle Search Submit
+  // Handle Manual Submit (Enter key)
   const handleFilterSubmit = (e) => {
     e.preventDefault();
-    fetchData(); // Refetch with new filters
+    fetchData(false);
   };
 
-  if (loading) return <div className="min-h-screen pt-40 text-center">Loading Collection...</div>;
-  if (!data) return <div className="min-h-screen pt-40 text-center">Category not found.</div>;
+  // --- RENDER ---
+
+  // 1. Initial Full Page Load (Only time we show full spinner)
+  if (initialLoading && !data) return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white gap-4">
+          <div className="w-12 h-12 border-4 border-[#B91C1C] border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-heading font-bold uppercase tracking-widest text-xs">Loading Collection...</p>
+      </div>
+  );
+  
+  if (!data && !initialLoading) return (
+    <div className="min-h-screen pt-40 text-center font-heading text-2xl">Category not found.</div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] font-manrope">
+    <div className="min-h-screen bg-white font-sans selection:bg-[#B91C1C] selection:text-white">
       <Navbar />
 
-      {/* --- HEADER --- */}
-      <div className="pt-32 pb-10 px-6 text-center bg-white border-b border-gray-100">
-        <h1 className="font-bodoni text-5xl mb-3 capitalize">{data.mainCategory.name}</h1>
-        <p className="text-gray-400 text-xs uppercase tracking-[0.2em]">
-          {data.sections.length} Sub-Collections Available
-        </p>
+      {/* --- HEADER (Always Visible - No flickering) --- */}
+      <div className="pt-5 pb-8 px-6 text-center bg-white relative z-10">
+        <h1 className="font-heading font-black text-5xl md:text-7xl uppercase tracking-tighter mb-4 text-black">
+            {data.mainCategory.name}
+        </h1>
+        <div className="flex items-center justify-center gap-4">
+             <div className="w-8 h-[2px] bg-[#B91C1C]"></div>
+             <p className="text-neutral-500 text-[10px] font-bold uppercase tracking-[0.25em]">
+                {data.sections.length > 0 ? `${data.sections.length} Sub-Collections` : 'Exclusive Selection'}
+             </p>
+             <div className="w-8 h-[2px] bg-[#B91C1C]"></div>
+        </div>
 
-        {/* --- FILTER & SEARCH BAR --- */}
-        <form onSubmit={handleFilterSubmit} className="mt-8 max-w-4xl mx-auto flex flex-col md:flex-row gap-4 items-center justify-center">
-            
-            {/* Search Input */}
-            <div className="relative w-full md:w-96">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input 
-                  type="text" 
-                  placeholder={`Search in ${data.mainCategory.name}...`}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-full text-sm focus:outline-black"
-                />
-            </div>
+        {/* --- SEARCH & FILTERS --- */}
+        <div className="mt-8 max-w-4xl mx-auto">
+             <div className="flex flex-col md:flex-row gap-3 items-center justify-center">
+                
+                {/* Search Bar */}
+                <div className="relative w-full md:w-80 group">
+                    <Search className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#B91C1C] transition-colors" size={16} />
+                    <input 
+                      type="text" 
+                      placeholder="SEARCH..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-6 pr-4 py-2 bg-transparent border-b border-gray-200 text-sm font-bold uppercase tracking-wide focus:border-[#B91C1C] focus:outline-none placeholder-gray-300 transition-colors"
+                    />
+                    {isFiltering && (
+                         <div className="absolute right-0 top-1/2 -translate-y-1/2">
+                            <Loader2 size={14} className="animate-spin text-[#B91C1C]" />
+                         </div>
+                    )}
+                </div>
 
-            {/* Price Filter Toggler */}
-            <button 
-              type="button"
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-6 py-2 border border-gray-200 rounded-full hover:bg-black hover:text-white transition text-xs font-bold uppercase tracking-wide"
-            >
-              <SlidersHorizontal size={14} /> Filters
-            </button>
-
-            {/* Apply Button */}
-            <button type="submit" className="hidden md:block px-6 py-2 bg-black text-white rounded-full text-xs font-bold uppercase">
-              Update
-            </button>
-        </form>
-
-        {/* Expandable Filter Area */}
-        {showFilters && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            className="overflow-hidden mt-4 max-w-lg mx-auto bg-gray-50 p-6 rounded-xl"
-          >
-             <div className="flex gap-4 items-center justify-center">
-               <input 
-                 placeholder="Min Price" 
-                 type="number" 
-                 className="p-2 border rounded w-24 text-center text-sm"
-                 value={priceRange.min}
-                 onChange={(e) => setPriceRange({...priceRange, min: e.target.value})}
-               />
-               <span className="text-gray-400">-</span>
-               <input 
-                 placeholder="Max Price" 
-                 type="number" 
-                 className="p-2 border rounded w-24 text-center text-sm"
-                 value={priceRange.max}
-                 onChange={(e) => setPriceRange({...priceRange, max: e.target.value})}
-               />
-               <button onClick={handleFilterSubmit} className="bg-black text-white px-4 py-2 rounded text-xs font-bold">Apply</button>
+                {/* Filter Toggle */}
+                <button 
+                  type="button"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`flex items-center gap-2 px-5 py-2 border transition-all text-[10px] font-black uppercase tracking-[0.2em]
+                    ${showFilters ? 'bg-black text-white border-black' : 'bg-white text-black border-gray-200 hover:border-[#B91C1C] hover:text-[#B91C1C]'}
+                  `}
+                >
+                  <SlidersHorizontal size={14} /> Filters
+                </button>
              </div>
-          </motion.div>
-        )}
+
+             {/* Expandable Filter Area */}
+             <AnimatePresence>
+                {showFilters && (
+                  <motion.div 
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                     <form onSubmit={handleFilterSubmit} className="mt-4 pt-4 border-t border-dashed border-gray-200 flex items-center justify-center gap-3">
+                        <span className="text-[10px] font-bold uppercase text-gray-400">Price</span>
+                        <input 
+                          placeholder="MIN" 
+                          type="number" 
+                          className="w-16 p-1.5 bg-gray-50 border border-gray-200 text-center text-xs font-bold focus:border-[#B91C1C] outline-none"
+                          value={priceRange.min}
+                          onChange={(e) => setPriceRange({...priceRange, min: e.target.value})}
+                        />
+                        <span className="text-gray-300">-</span>
+                        <input 
+                          placeholder="MAX" 
+                          type="number" 
+                          className="w-16 p-1.5 bg-gray-50 border border-gray-200 text-center text-xs font-bold focus:border-[#B91C1C] outline-none"
+                          value={priceRange.max}
+                          onChange={(e) => setPriceRange({...priceRange, max: e.target.value})}
+                        />
+                        <button type="submit" className="bg-[#B91C1C] text-white px-5 py-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-black transition-colors">
+                            Apply
+                        </button>
+                     </form>
+                  </motion.div>
+                )}
+             </AnimatePresence>
+        </div>
       </div>
 
-      {/* --- SECTIONS CONTENT --- */}
-      <div className="max-w-7xl mx-auto px-4 md:px-8 pb-20">
-        
-        {/* 1. Direct Products (If any exist in main category) */}
-        {data.mainProducts.length > 0 && (
-           <ProductSection title={`All ${data.mainCategory.name}`} products={data.mainProducts} />
-        )}
+      {/* --- CONTENT AREA (Relative for Loading Overlay) --- */}
+      <div className="relative min-h-[400px]">
+          
+          {/* Loading Overlay (Subtle) */}
+          <AnimatePresence>
+            {isFiltering && (
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 z-20 bg-white/60 backdrop-blur-[2px] flex items-start pt-20 justify-center"
+                >
+                    <div className="flex items-center gap-3 bg-black text-white px-6 py-3 rounded-full shadow-xl">
+                        <Loader2 size={16} className="animate-spin text-[#B91C1C]" />
+                        <span className="text-xs font-bold uppercase tracking-widest">Updating...</span>
+                    </div>
+                </motion.div>
+            )}
+          </AnimatePresence>
 
-        {/* 2. Sub-Category Sections */}
-        {data.sections.map((section) => (
-           section.products.length > 0 && (
-             <ProductSection 
-                key={section._id} 
-                title={section.name} 
-                products={section.products} 
-                viewAllLink={`/category/sub/${section.slug}`} // You can create this route later if needed
-             />
-           )
-        ))}
+          <div className="max-w-[1920px] mx-auto px-4 md:px-8 pb-24">
+            
+            {/* 1. Main Products */}
+            {data.mainProducts.length > 0 && (
+               <ProductGrid title="All Items" products={data.mainProducts} />
+            )}
 
-        {data.sections.every(s => s.products.length === 0) && data.mainProducts.length === 0 && (
-           <div className="text-center py-20 text-gray-400">No products found in this category.</div>
-        )}
+            {/* 2. Sub-Category Sections */}
+            {data.sections.map((section) => (
+               section.products.length > 0 && (
+                 <ProductGrid 
+                   key={section._id} 
+                   title={section.name} 
+                   products={section.products} 
+                 />
+               )
+            ))}
 
+            {/* Empty State */}
+            {data.sections.every(s => s.products.length === 0) && data.mainProducts.length === 0 && (
+               <div className="text-center py-20">
+                  <p className="font-heading text-2xl text-gray-300 uppercase mb-4">No items found.</p>
+                  <button 
+                    onClick={() => { setSearchQuery(''); setPriceRange({min:'', max:''}); }} 
+                    className="px-6 py-2 border border-gray-200 text-xs font-bold uppercase hover:bg-black hover:text-white transition-colors"
+                  >
+                      Clear All Filters
+                  </button>
+               </div>
+            )}
+          </div>
       </div>
     </div>
   );
 }
 
-// --- SUB-COMPONENT: PRODUCT SECTION ---
-function ProductSection({ title, products, viewAllLink }) {
+// --- REUSABLE PRODUCT GRID ---
+function ProductGrid({ title, products }) {
   return (
-    <div className="mt-16">
-      <div className="flex justify-between items-end mb-6 px-2">
-        <div>
-          <h2 className="text-2xl font-bodoni text-gray-900 capitalize">{title}</h2>
-          <div className="h-0.5 w-12 bg-black mt-2"></div>
-        </div>
-        {/* 'See More' could just load more via JS or link to a specific filtered page */}
-        <button className="text-xs font-bold uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
-          See All <ArrowRight size={12} />
-        </button>
+    <div className="mb-16">
+      <div className="flex items-center gap-4 mb-6">
+         <h2 className="text-2xl md:text-3xl font-heading font-black uppercase tracking-tight text-black">{title}</h2>
+         <div className="flex-1 h-[1px] bg-gray-100"></div>
       </div>
 
-      {/* Horizontal Scroll / Grid for Mobile/Desktop */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-10">
+      {/* Grid: Optimized Gap & Columns */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-2 gap-y-8 md:gap-x-4">
         {products.map((product) => (
-           <Link href={`/product/${product.slug}`} key={product._id} className="group block">
-              <div className="relative aspect-[3/4] overflow-hidden bg-gray-100 rounded-sm mb-4">
-                <img 
-                  src={product.images[0]} 
-                  alt={product.name} 
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                />
-                {/* Quick Add Button Animation */}
-                <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-white/90 backdrop-blur py-3 text-center border-t border-gray-100">
-                   <span className="text-[10px] font-bold uppercase tracking-widest">View Details</span>
-                </div>
-              </div>
-              
-              <h3 className="text-sm font-semibold text-gray-900 group-hover:underline decoration-1 underline-offset-4">{product.name}</h3>
-              <div className="flex gap-2 items-center mt-1">
-                {product.discountPrice ? (
-                    <>
-                      <span className="text-xs font-bold text-red-600">৳{product.discountPrice}</span>
-                      <span className="text-xs text-gray-400 line-through">৳{product.price}</span>
-                    </>
-                ) : (
-                    <span className="text-xs font-bold text-gray-900">৳{product.price}</span>
-                )}
-              </div>
-           </Link>
+           <ProductCard key={product._id} product={product} />
         ))}
       </div>
     </div>

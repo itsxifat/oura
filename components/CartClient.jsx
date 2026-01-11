@@ -3,157 +3,183 @@
 import { useState, useEffect } from 'react';
 import { useCart } from '@/lib/context/CartContext';
 import Link from 'next/link';
-import { Minus, Plus, X, ArrowRight, ShoppingBag, Ticket, Zap, Sparkles, AlertTriangle } from 'lucide-react';
+import Image from 'next/image'; 
+import { Minus, Plus, X, ArrowRight, ShoppingBag, Ticket, Zap, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Barcode from 'react-barcode';
 
-// --- CUSTOM TAKA ICON ---
+// --- CUSTOM TAKA ICON (Updated) ---
 const Taka = ({ size = 16, className = "" }) => (
-  <svg width={size} height={size+4} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={`inline-block align-middle ${className}`}>
-    <text x="50%" y="55%" dominantBaseline="middle" textAnchor="middle" fontSize="20" fontWeight="bold" fill="currentColor" style={{ fontFamily: "'Bodoni Moda', serif" }}>৳</text>
+  <svg 
+    width={size} 
+    height={size+2} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg" 
+    className={`inline-block align-middle ${className}`}
+    style={{ transform: 'translateY(-2px)' }}
+  >
+    <text 
+      x="50%" 
+      y="58%" 
+      dominantBaseline="middle" 
+      textAnchor="middle" 
+      fontSize="22" 
+      fontWeight="bold" 
+      fill="currentColor" 
+      style={{ fontFamily: "bodoni" }} 
+    >
+      ৳
+    </text>
   </svg>
 );
 
-// --- SUB-COMPONENT: PREMIUM CART ITEM ---
+// --- SUB-COMPONENT: CART ITEM ---
 const CartItem = ({ item, updateQuantity, removeFromCart }) => {
-  // Safe Image Logic
-  const imageUrl = (Array.isArray(item.images) && item.images.length > 0) ? item.images[0] : (typeof item.image === 'string' ? item.image : '/placeholder.jpg');
+  // 1. Safe Image Logic
+  // Check if image is an array (from DB) or string (local)
+  const rawImage = Array.isArray(item.images) ? item.images[0] : item.image;
+  const imageUrl = rawImage || '/placeholder.jpg';
 
-  // Variant Logic
+  // 2. Variant & Stock Logic
   const variantData = item.variants?.find(v => v.size === item.selectedSize);
   const stockLimit = variantData ? variantData.stock : (item.stock || 10);
   const isLowStock = stockLimit < 5 && stockLimit > 0;
 
-  // --- PRICE LOGIC FIX ---
-  // Use discountPrice if valid, otherwise base price
+  // 3. Price Logic
   const effectivePrice = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
   const isOnSale = effectivePrice < item.price;
+
+  // 4. Tag Logic (Fix)
+  // Prioritize the 'tag' string sent from the backend (calculateCart), fallback to tags array
+  const displayTag = item.tag || item.tags?.[0]?.name;
 
   return (
     <motion.div 
       layout 
-      initial={{ opacity: 0, y: 20 }} 
+      initial={{ opacity: 0, y: 10 }} 
       animate={{ opacity: 1, y: 0 }} 
-      exit={{ opacity: 0, x: -20 }} 
-      className="group relative flex flex-col sm:flex-row gap-4 md:gap-8 py-6 md:py-8 border-b border-gray-100 last:border-0"
+      exit={{ opacity: 0, height: 0, marginBottom: 0 }} 
+      className="group relative flex flex-col sm:flex-row gap-4 md:gap-6 py-6 border-b border-neutral-100 last:border-0"
     >
-      {/* 1. IMAGE SECTION */}
+      {/* --- IMAGE SECTION (Optimized) --- */}
       <div className="flex gap-4 sm:block">
-        <div className="w-20 sm:w-24 md:w-32 aspect-[3/4] bg-[#f5f5f5] relative overflow-hidden shadow-sm shrink-0">
-          <img 
+        <div className="w-20 sm:w-24 md:w-28 aspect-[3/4] bg-neutral-100 relative overflow-hidden shrink-0">
+          <Image 
             src={imageUrl} 
             alt={item.name} 
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-            onError={(e) => e.target.src = '/placeholder.jpg'}
+            fill
+            sizes="(max-width: 768px) 100px, 150px"
+            quality={90}
+            className="object-cover transition-transform duration-700 group-hover:scale-105"
           />
-          {isOnSale && (
-             <div className="absolute top-0 left-0 bg-[#D4AF37] text-white text-[9px] font-bold px-2 py-1 uppercase tracking-widest">Sale</div>
-          )}
+          {/* Note: Overlay tag removed as requested to avoid duplication */}
         </div>
         
         {/* MOBILE: Delete Button */}
         <button 
           onClick={() => removeFromCart(item._id, item.selectedSize)} 
-          className="sm:hidden text-gray-300 hover:text-red-600 transition-colors p-1"
+          className="sm:hidden text-neutral-400 hover:text-[#B91C1C] transition-colors p-1"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
       </div>
 
-      {/* 2. DETAILS SECTION */}
+      {/* --- DETAILS SECTION --- */}
       <div className="flex-1 flex flex-col justify-between py-1 min-w-0">
         <div>
+          {/* Title Row */}
           <div className="flex justify-between items-start mb-1">
-            <Link href={`/product/${item.slug || '#'}`} className="font-bodoni text-lg md:text-2xl text-black leading-tight hover:text-[#D4AF37] transition-colors line-clamp-2 pr-4">
+            <Link href={`/product/${item.slug || '#'}`} className="font-heading font-black text-lg md:text-xl text-black uppercase tracking-tight leading-none hover:text-[#B91C1C] transition-colors line-clamp-2 pr-4">
               {item.name}
             </Link>
             {/* DESKTOP: Delete Button */}
             <button 
               onClick={() => removeFromCart(item._id, item.selectedSize)} 
-              className="hidden sm:block text-gray-300 hover:text-red-600 transition-colors p-1 -mr-2"
+              className="hidden sm:block text-neutral-300 hover:text-[#B91C1C] transition-colors p-1 -mr-2"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
           
-          {/* METADATA ROW */}
-          <div className="flex flex-wrap items-center gap-3 text-[10px] uppercase tracking-widest text-gray-500 mb-3">
-             <span>{item.category?.name || 'Collection'}</span>
-             
-             {/* SKU */}
-             {item.sku && (
-               <>
-                 <span className="w-[1px] h-3 bg-gray-300"></span>
-                 <span className="font-mono text-gray-700"> {item.sku}</span>
-               </>
-             )}
+          {/* Metadata Row (Tags & Info) */}
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-3">
+              <span>{item.category?.name || 'Item'}</span>
+              
+              {/* Size Badge */}
+              {item.selectedSize && (
+                <>
+                  <span className="w-1 h-1 bg-neutral-300 rounded-full"></span>
+                  <span className="text-black bg-neutral-100 px-1.5 py-0.5">
+                    Size: {item.selectedSize}
+                  </span>
+                </>
+              )}
 
-             {/* SIZE BADGE */}
-             {item.selectedSize && (
-                <span className="bg-black text-white px-2 py-0.5 rounded-sm font-bold ml-1">
-                  Size: {item.selectedSize}
-                </span>
-             )}
+               {/* Tag Badge (From DB) */}
+               {displayTag && (
+                <>
+                  <span className="w-1 h-1 bg-neutral-300 rounded-full"></span>
+                  <span className="text-[#B91C1C] bg-neutral-100 px-1.5 py-0.5">
+                    {displayTag}
+                  </span>
+                </>
+              )}
           </div>
 
-          {/* BARCODE & STOCK WARNING */}
+          {/* Barcode & Stock */}
           <div className="flex flex-col gap-2 mb-4">
-             {/* Scannable Barcode */}
              {item.barcode && (
-               <div className="opacity-80 mix-blend-multiply origin-left scale-90 sm:scale-100">
+               <div className="opacity-40 origin-left scale-75 sm:scale-90 grayscale">
                  <Barcode 
                    value={item.barcode} 
-                   width={1.2} 
-                   height={30} 
-                   fontSize={10} 
-                   displayValue={true} 
-                   background="transparent" 
-                   lineColor="#000000"
-                   margin={0}
+                   width={1.2} height={25} fontSize={10} 
+                   displayValue={false} background="transparent" lineColor="#000" margin={0}
                  />
                </div>
              )}
 
              {isLowStock && (
-                <span className="text-[10px] text-red-500 font-bold flex items-center gap-1 bg-red-50 px-2 py-1 rounded w-fit">
-                  <AlertTriangle size={12}/> Only {stockLimit} items left
+                <span className="text-[9px] text-[#B91C1C] font-bold flex items-center gap-1">
+                  <AlertTriangle size={10} className="fill-[#B91C1C]"/> Low Stock: Only {stockLimit} left
                 </span>
              )}
           </div>
 
-          {/* CONTROLS ROW */}
-          <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-50 sm:border-none">
-              {/* Quantity Control */}
-              <div className="flex items-center border border-gray-200 h-8 bg-white">
+          {/* Controls & Price */}
+          <div className="flex items-center justify-between mt-auto pt-2 border-t border-dashed border-neutral-100 sm:border-none">
+              
+              {/* Quantity */}
+              <div className="flex items-center border border-neutral-200 h-8">
                 <button 
                   onClick={() => updateQuantity(item._id, item.selectedSize, item.quantity - 1)} 
                   className="w-8 h-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
                 >
                   <Minus size={12} />
                 </button>
-                <span className="w-8 text-center text-xs font-bold font-mono">{item.quantity}</span>
+                <span className="w-8 text-center text-xs font-bold">{item.quantity}</span>
                 <button 
                   onClick={() => updateQuantity(item._id, item.selectedSize, item.quantity + 1)} 
                   disabled={item.quantity >= stockLimit}
-                  className="w-8 h-full flex items-center justify-center hover:bg-black hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black"
+                  className="w-8 h-full flex items-center justify-center hover:bg-black hover:text-white transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                 >
                   <Plus size={12} />
                 </button>
               </div>
 
-              {/* Price Calculation */}
+              {/* Price Display */}
               <div className="text-right flex flex-col items-end">
                 {isOnSale ? (
                    <>
-                      <span className="text-sm md:text-base font-bold text-[#D4AF37] flex items-center gap-0.5">
+                      <span className="text-sm font-bold text-[#B91C1C] flex items-center gap-0.5">
                         <Taka size={14} />{(effectivePrice * item.quantity).toLocaleString()}
                       </span>
-                      <span className="text-[10px] text-gray-400 line-through flex items-center gap-0.5">
+                      <span className="text-[10px] text-neutral-400 line-through flex items-center gap-0.5">
                         <Taka size={10} />{(item.price * item.quantity).toLocaleString()}
                       </span>
                    </>
                 ) : (
-                   <span className="text-sm md:text-base font-bold flex items-center gap-0.5 text-black">
+                   <span className="text-sm font-bold flex items-center gap-0.5 text-black">
                      <Taka size={14} />{(effectivePrice * item.quantity).toLocaleString()}
                    </span>
                 )}
@@ -169,8 +195,7 @@ const CartItem = ({ item, updateQuantity, removeFromCart }) => {
 export default function CartClient() {
   const { 
     cart, removeFromCart, updateQuantity, 
-    cartTotal, grandTotal, appliedCoupon, 
-    applyCouponCode, removeCoupon, manualCode, couponError 
+    appliedCoupon, applyCouponCode, removeCoupon, manualCode, couponError 
   } = useCart();
 
   const [mounted, setMounted] = useState(false);
@@ -182,8 +207,7 @@ export default function CartClient() {
   const handleApply = () => { if (inputVal.trim()) applyCouponCode(inputVal); };
   const handleRemove = () => { removeCoupon(); setInputVal(''); };
 
-  // --- RECALCULATE TOTALS LOCALLY TO ENSURE DISPLAY ACCURACY ---
-  // Ideally this should come from context, but doing it here guarantees the UI reflects the fix immediately
+  // Calculate Totals Locally to avoid Context Delay Lag
   const localSubTotal = cart.reduce((acc, item) => {
       const price = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
       return acc + (price * item.quantity);
@@ -195,41 +219,39 @@ export default function CartClient() {
 
   // --- EMPTY STATE ---
   if (cart.length === 0) return (
-    <div className="min-h-[70vh] flex flex-col items-center justify-center font-manrope bg-[#faf9f6] relative overflow-hidden px-4 text-center">
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '30px 30px'}}></div>
-      <div className="mb-6 md:mb-8 p-6 md:p-8 rounded-full bg-white shadow-xl animate-float">
-        <ShoppingBag size={32} className="text-[#D4AF37]" strokeWidth={1} />
+    <div className="min-h-[60vh] flex flex-col items-center justify-center font-sans bg-white relative px-6 text-center">
+      <div className="mb-6 p-6 rounded-full bg-neutral-50 border border-neutral-100">
+        <ShoppingBag size={24} className="text-[#B91C1C]" strokeWidth={1.5} />
       </div>
-      <h1 className="font-bodoni text-3xl md:text-4xl mb-4 text-black italic">Your Bag is Empty</h1>
-      <Link href="/product" className="group relative px-8 py-4 bg-black text-white overflow-hidden shadow-lg hover:shadow-xl transition-all mt-4">
-        <div className="absolute inset-0 bg-[#D4AF37] translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-500 ease-in-out"></div>
-        <span className="relative z-10 text-xs font-bold uppercase tracking-[0.2em] group-hover:text-white transition-colors">Explore Collection</span>
+      <h1 className="font-heading font-black text-3xl uppercase tracking-tight mb-2 text-black">Your Bag is Empty</h1>
+      <p className="text-xs text-neutral-500 mb-8 uppercase tracking-widest">Start curating your wardrobe.</p>
+      <Link href="/categories" className="px-8 py-3 bg-black text-white text-[10px] font-bold uppercase tracking-[0.25em] hover:bg-[#B91C1C] transition-colors">
+        View Collections
       </Link>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] font-manrope relative pb-20">
-      <div className="absolute top-0 left-0 w-full h-[200px] md:h-[300px] bg-white shadow-sm -z-0"></div>
+    <div className="min-h-screen bg-white font-sans relative pb-20">
       
-      <div className="max-w-[1200px] mx-auto px-4 md:px-6 py-8 md:py-12 relative z-10">
+      <div className="max-w-[1200px] mx-auto px-4 md:px-6 py-12 md:py-20 relative z-10">
         
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-16 border-b border-gray-100 pb-6 md:pb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 border-b-2 border-black pb-6">
            <div>
-              <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#D4AF37] block mb-2">The Collection</span>
-              <h1 className="font-bodoni text-4xl md:text-5xl text-black">Shopping Bag</h1>
+              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-[#B91C1C] block mb-2">Cart Review</span>
+              <h1 className="font-heading font-black text-5xl md:text-6xl text-black uppercase tracking-tighter leading-none">Shopping Bag</h1>
            </div>
-           <p className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 mt-4 md:mt-0">
-             {cart.length} {cart.length === 1 ? 'Item' : 'Items'} Reserved
+           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-4 md:mt-0">
+             {cart.length} {cart.length === 1 ? 'Item' : 'Items'}
            </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-20 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-start">
           
           {/* LEFT: Items List */}
           <div className="lg:col-span-7">
-              <div className="bg-white p-4 md:p-8 shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-white/50 rounded-lg">
+              <div className="flex flex-col gap-0">
                 <AnimatePresence mode='popLayout'>
                   {cart.map((item) => (
                     <CartItem 
@@ -245,101 +267,90 @@ export default function CartClient() {
 
           {/* RIGHT: Summary & Checkout */}
           <div className="lg:col-span-5 lg:sticky lg:top-32">
-            <div className="bg-white p-6 md:p-10 border border-gray-100 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] relative overflow-hidden rounded-lg">
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent"></div>
-
-              <h2 className="font-bodoni text-2xl mb-8 flex items-center gap-3">
-                <Sparkles size={16} className="text-[#D4AF37]" /> Order Summary
+            <div className="bg-neutral-50 p-6 md:p-8 border border-neutral-200">
+              
+              <h2 className="font-heading font-black text-xl uppercase tracking-tight mb-6 flex items-center gap-2">
+                Order Summary
               </h2>
               
               {/* COUPON SECTION */}
-              <div className="mb-10">
+              <div className="mb-8">
                   {appliedCoupon && (
-                    <div className={`p-4 mb-4 flex justify-between items-center border rounded-md ${appliedCoupon.isAuto ? 'bg-[#F0F7FF] border-[#E0F0FF]' : 'bg-[#fffdf5] border-[#D4AF37]/20'}`}>
+                    <div className="p-3 mb-4 flex justify-between items-center border border-[#B91C1C]/20 bg-white">
                       <div className="flex items-center gap-3">
-                          {appliedCoupon.isAuto ? <Zap size={16} className="text-blue-500" /> : <Ticket size={16} className="text-[#D4AF37]" />}
+                          {appliedCoupon.isAuto ? <Zap size={14} className="text-[#B91C1C]" /> : <Ticket size={14} className="text-black" />}
                           <div>
                              <span className="text-[10px] font-bold uppercase tracking-widest text-black block">
-                                {appliedCoupon.isAuto ? "Auto Offer" : appliedCoupon.code}
+                                {appliedCoupon.isAuto ? "Auto Applied" : appliedCoupon.code}
                              </span>
-                             <span className="text-[10px] text-gray-500">{appliedCoupon.desc}</span>
+                             <span className="text-[9px] font-bold text-[#B91C1C]">{appliedCoupon.desc}</span>
                           </div>
                        </div>
                        {!appliedCoupon.isAuto && (
-                          <button onClick={handleRemove} className="text-gray-400 hover:text-red-500 transition-colors"><X size={14}/></button>
+                          <button onClick={handleRemove} className="text-neutral-400 hover:text-black transition-colors"><X size={14}/></button>
                        )}
                     </div>
                   )}
 
                   {(!appliedCoupon || appliedCoupon.isAuto) && (
-                    <div className="relative group">
+                    <div className="flex gap-2">
                        <input 
                          value={inputVal}
                          onChange={(e) => setInputVal(e.target.value.toUpperCase())}
-                         placeholder=" "
-                         className="peer w-full bg-transparent border-b border-gray-200 py-3 pr-20 text-xs font-bold uppercase tracking-widest outline-none focus:border-[#D4AF37] transition-colors bg-gray-50/50 px-2 rounded-t"
+                         placeholder="PROMO CODE"
+                         className="flex-1 bg-white border border-neutral-200 py-3 px-4 text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors placeholder-neutral-300"
                        />
-                       <label className="absolute left-2 top-3 text-[10px] uppercase tracking-widest text-gray-400 transition-all peer-focus:-top-2 peer-focus:text-[8px] peer-focus:text-[#D4AF37] peer-not-placeholder-shown:-top-2 peer-not-placeholder-shown:text-[8px] pointer-events-none">
-                         Promo Code
-                       </label>
                        <button 
                          onClick={handleApply}
                          disabled={!inputVal}
-                         className="absolute right-0 bottom-2 text-[10px] font-bold uppercase tracking-widest text-black hover:text-[#D4AF37] disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-3 py-1"
+                         className="px-4 bg-black text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#B91C1C] disabled:opacity-50 disabled:hover:bg-black transition-colors"
                        >
                          Apply
                        </button>
                     </div>
                   )}
-                  {couponError && <p className="text-[10px] text-red-500 mt-2 font-medium tracking-wide flex items-center gap-1"><X size={10}/> {couponError}</p>}
+                  {couponError && <p className="text-[9px] text-[#B91C1C] mt-2 font-bold uppercase tracking-wide flex items-center gap-1"><AlertTriangle size={10}/> {couponError}</p>}
               </div>
 
-              {/* TOTALS */}
-              <div className="space-y-4 mb-8 border-b border-gray-100 pb-8 border-dashed">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 font-medium">Subtotal</span>
-                  <span className="font-bold text-black flex items-center gap-1">
-                    {/* Use Local Calculation for Display Accuracy */}
+              {/* CALCULATIONS */}
+              <div className="space-y-3 mb-8 border-t border-dashed border-neutral-200 pt-6">
+                <div className="flex justify-between text-xs font-bold uppercase tracking-wide text-neutral-500">
+                  <span>Subtotal</span>
+                  <span className="text-black flex items-center gap-1">
                     <Taka size={12} />{localSubTotal.toLocaleString()}
                   </span>
                 </div>
                 
                 {appliedCoupon && (
-                  <div className="flex justify-between text-sm text-[#D4AF37]">
-                    <span className="font-medium">Discount Applied</span>
-                    <span className="font-bold flex items-center gap-1">
+                  <div className="flex justify-between text-xs font-bold uppercase tracking-wide text-[#B91C1C]">
+                    <span>Discount</span>
+                    <span className="flex items-center gap-1">
                       -<Taka size={12} />{appliedCoupon.amount.toLocaleString()}
                     </span>
                   </div>
                 )}
 
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 font-medium">Estimated Delivery</span>
-                  <span className="text-[10px] text-gray-400 uppercase tracking-wide">Calculated at Checkout</span>
+                <div className="flex justify-between text-xs font-bold uppercase tracking-wide text-neutral-500">
+                  <span>Delivery</span>
+                  <span className="text-[9px] bg-black text-white px-1.5 py-0.5">Calculated Next</span>
                 </div>
               </div>
 
-              <div className="flex justify-between items-end mb-8">
-                <span className="text-xs font-bold uppercase tracking-[0.2em] text-black">Total</span>
-                <div className="flex flex-col items-end">
-                  <span className="text-[10px] text-gray-400 mb-1">BDT</span>
-                  <span className="font-bodoni text-4xl text-black leading-none flex items-center gap-1">
-                    {/* Use Local Calculation for Display Accuracy */}
-                    <Taka size={28} />{localGrandTotal.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              {/* CHECKOUT BUTTON */}
-              <Link href="/checkout" className="group relative w-full h-14 bg-black overflow-hidden flex items-center justify-center transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 rounded-sm">
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#D4AF37]/40 to-transparent translate-x-[-100%] group-hover:animate-[shine_1s_ease-in-out_infinite]" />
-                <span className="relative z-10 text-white text-[11px] font-bold uppercase tracking-[0.25em] group-hover:text-[#D4AF37] transition-colors flex items-center gap-3">
-                  Secure Checkout <ArrowRight size={14} />
+              {/* TOTAL */}
+              <div className="flex justify-between items-end mb-8 pt-6 border-t-2 border-black">
+                <span className="text-sm font-black uppercase tracking-widest text-black">Total</span>
+                <span className="font-heading font-black text-3xl text-black leading-none flex items-center gap-1">
+                   <Taka size={24} />{localGrandTotal.toLocaleString()}
                 </span>
+              </div>
+
+              {/* ACTIONS */}
+              <Link href="/checkout" className="group block w-full bg-[#B91C1C] text-white text-center py-4 text-[11px] font-black uppercase tracking-[0.25em] hover:bg-black transition-colors shadow-lg">
+                 Secure Checkout <ArrowRight size={14} className="inline ml-2 mb-0.5 group-hover:translate-x-1 transition-transform" />
               </Link>
               
-              <div className="mt-6 text-center">
-                <Link href="/product" className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 hover:text-black transition-colors border-b border-transparent hover:border-black pb-0.5">
+              <div className="mt-4 text-center">
+                <Link href="/categories" className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400 hover:text-black border-b border-transparent hover:border-black transition-all">
                   Continue Shopping
                 </Link>
               </div>
