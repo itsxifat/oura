@@ -10,6 +10,7 @@ import bcrypt from 'bcryptjs';
 import { sendOtpEmail } from '@/lib/email'; 
 import { revalidatePath } from 'next/cache';
 
+// --- ADMIN LOGIN ---
 export async function loginAction(formData) {
   const password = formData.get('password');
   if (password === process.env.ADMIN_PASSWORD) {
@@ -23,11 +24,15 @@ export async function loginAction(formData) {
   return { success: false, error: 'Invalid Password' };
 }
 
+// --- PROFILE UPDATE ---
 export async function updateUserProfile(formData) {
   await connectDB();
-  const email = formData.get('email');
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Unauthorized" };
+
   try {
-    const user = await User.findOne({ email });
+    // Find user by Session Email (Secure)
+    const user = await User.findOne({ email: session.user.email });
     if (!user) return { error: "User not found" };
 
     if (formData.get('name')) user.name = formData.get('name');
@@ -38,17 +43,23 @@ export async function updateUserProfile(formData) {
       const bytes = await imageFile.arrayBuffer();
       const { iv, content } = encryptBuffer(Buffer.from(bytes));
       user.profilePicture = { data: content, iv: iv, contentType: imageFile.type };
-      user.image = null; 
+      user.image = null; // Clear OAuth image if custom one is uploaded
     }
+    
     await user.save();
-    revalidatePath('/account'); revalidatePath('/', 'layout'); 
+    revalidatePath('/account'); 
     return { success: true };
-  } catch (error) { return { error: "Failed to update profile" }; }
+  } catch (error) { 
+    console.error(error);
+    return { error: "Failed to update profile" }; 
+  }
 }
 
+// --- PASSWORD CHANGE (Hybrid Support) ---
 export async function changePassword(formData) {
   const session = await getServerSession(authOptions);
   if (!session) return { success: false, error: "Unauthorized" };
+
   const currentPassword = formData.get('currentPassword');
   const newPassword = formData.get('newPassword');
   const confirmPassword = formData.get('confirmPassword');
@@ -60,54 +71,103 @@ export async function changePassword(formData) {
   const user = await User.findOne({ email: session.user.email });
   if (!user) return { success: false, error: "User not found" };
 
-  const isValid = await bcrypt.compare(currentPassword, user.password);
-  if (!isValid) return { success: false, error: "Incorrect current password" };
+  // ✅ FIX: Hybrid Account Logic
+  // Only require current password IF the user actually has one set.
+  // This allows Google-only users to SET a password for the first time.
+  if (user.password && user.password.length > 0) {
+      if (!currentPassword) return { success: false, error: "Current password required" };
+      
+      const isValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isValid) return { success: false, error: "Incorrect current password" };
+  }
 
+  // Hash and save new password
   user.password = await bcrypt.hash(newPassword, 12);
   await user.save();
+  
   return { success: true };
 }
 
+// --- EMAIL CHANGE: STEP 1 (Initiate) ---
 export async function initiateEmailChange(formData) {
   const session = await getServerSession(authOptions);
   if (!session) return { success: false, error: "Unauthorized" };
+
   const password = formData.get('password');
-  const newEmail = formData.get('newEmail');
+  const newEmail = formData.get('newEmail')?.toLowerCase().trim(); // Normalize
+
+  if (!newEmail) return { success: false, error: "New email is required" };
+  if (newEmail === session.user.email) return { success: false, error: "Please enter a different email" };
 
   await connectDB();
   const user = await User.findOne({ email: session.user.email });
-  if (user.password) {
-      if (!password) return { success: false, error: "Password required" };
+  if (!user) return { success: false, error: "User not found" };
+
+  // ✅ FIX: Only verify password if user HAS one
+  if (user.password && user.password.length > 0) {
+      if (!password) return { success: false, error: "Password required to change email" };
       const isValid = await bcrypt.compare(password, user.password);
       if (!isValid) return { success: false, error: "Incorrect password" };
   }
+
+  // Check if new email is taken
   const existingUser = await User.findOne({ email: newEmail });
   if (existingUser) return { success: false, error: "Email is already in use" };
 
+  // Generate OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  // Save OTP to DB
   user.emailChangeOTP = otp;
-  user.emailChangeOTPExpires = new Date(Date.now() + 10 * 60 * 1000); 
+  user.emailChangeOTPExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
   user.pendingNewEmail = newEmail;
+  
   await user.save();
-  try { await sendOtpEmail(newEmail, otp); } catch (error) { return { success: false, error: "Failed to send OTP email" }; }
+
+  // Send Email
+  try { 
+      await sendOtpEmail(newEmail, otp, 'email_change'); 
+  } catch (error) { 
+      console.error("Email Error:", error);
+      return { success: false, error: "Failed to send OTP email" }; 
+  }
+
   return { success: true };
 }
 
+// --- EMAIL CHANGE: STEP 2 (Verify) ---
 export async function verifyEmailChangeOTP(formData) {
   const session = await getServerSession(authOptions);
   if (!session) return { success: false, error: "Unauthorized" };
+
   const otp = formData.get('otp');
-  const newEmail = formData.get('newEmail');
+  const newEmail = formData.get('newEmail')?.toLowerCase().trim();
 
   await connectDB();
   const user = await User.findOne({ email: session.user.email });
-  if (!user || user.pendingNewEmail !== newEmail) return { success: false, error: "Invalid request" };
-  if (user.emailChangeOTP !== otp || user.emailChangeOTPExpires < new Date()) return { success: false, error: "Invalid or expired OTP" };
+  
+  if (!user) return { success: false, error: "User not found" };
 
+  // --- DEBUGGING LOGS (Check your terminal) ---
+  console.log("Input OTP:", otp);
+  console.log("DB OTP:", user.emailChangeOTP);
+  console.log("Input Email:", newEmail);
+  console.log("DB Pending Email:", user.pendingNewEmail); // This is likely undefined if Schema is wrong
+
+  if (!user.pendingNewEmail || user.pendingNewEmail !== newEmail) {
+      return { success: false, error: "Invalid request: Email mismatch or not found." };
+  }
+  
+  if (user.emailChangeOTP !== otp) return { success: false, error: "Invalid OTP" };
+  if (user.emailChangeOTPExpires < new Date()) return { success: false, error: "OTP Expired" };
+
+  // Apply Change
   user.email = newEmail;
   user.emailChangeOTP = undefined;
   user.emailChangeOTPExpires = undefined;
   user.pendingNewEmail = undefined;
+  
   await user.save();
+  
   return { success: true };
 }

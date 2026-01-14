@@ -13,27 +13,24 @@ export default async function ProductsPage() {
   const siteContent = await SiteContent.findOne({ identifier: 'main_layout' }).lean();
   
   // --- CRITICAL MEMORY FIX ---
-  // We must sanitize the Mongoose object to plain JSON before passing to Client Components.
-  // This prevents the "Heap out of memory" error.
   const rawLinks = siteContent?.navbarLinks ? siteContent.navbarLinks : [];
   const sanitizedLinks = JSON.parse(JSON.stringify(rawLinks));
 
   const navData = {
     logoImage: "/logo.png",
-    logoText: "ANAQA",
+    logoText: "OURA",
     links: sanitizedLinks
   };
 
-  // 2. Fetch All Products (Ensure this action also returns plain JSON)
+  // 2. Fetch All Products
   const products = await getAllProducts();
 
   return (
-    <div className="bg-[#faf9f6] min-h-screen">
-      {/* Navbar with Sticky Logic enabled via props if needed, 
-          but usually we handle path detection inside Navbar */}
+    // ✅ FIX: Changed background to White for premium contrast
+    <div className="bg-white min-h-screen text-black selection:bg-[#B91C1C] selection:text-white">
       <Navbar navData={navData} />
       
-      {/* Product Listing with Sticky Filter Bar */}
+      {/* Product Listing handles its own internal layout/padding */}
       <ProductListing initialProducts={products} />
     </div>
   );

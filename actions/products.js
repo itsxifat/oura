@@ -17,7 +17,7 @@ function generateSlug(text) {
     .replace(/-+$/, '');
 }
 
-function generateCode(prefix = "ANQ") {
+function generateCode(prefix = "OL") {
   const randomPart = Math.floor(100000 + Math.random() * 900000); 
   return `${prefix}-${randomPart}`;
 }
@@ -200,8 +200,14 @@ export async function createProduct(formData) {
   try {
     const name = formData.get('name');
     const description = formData.get('description');
-    const price = parseFloat(formData.get('price'));
+    
+    // VALIDATION: Check Category explicitly
     const category = formData.get('category');
+    if (!category || category === "") {
+      return { error: "Category is required." };
+    }
+
+    const price = parseFloat(formData.get('price'));
     
     // Inventory Handling
     const variantsJson = formData.get('variants');
@@ -212,18 +218,26 @@ export async function createProduct(formData) {
       ? variants.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0)
       : parseInt(formData.get('stock') || 0);
 
-    const sizeGuide = formData.get('sizeGuide') || null;
+    // SANITIZATION: Handle empty strings for ObjectIds and Dates
+    // This prevents "CastError" when form sends "" for optional fields
+    const sizeGuideRaw = formData.get('sizeGuide');
+    const sizeGuide = (sizeGuideRaw && sizeGuideRaw !== "") ? sizeGuideRaw : undefined;
 
-    const discountPrice = formData.get('discountPrice') ? parseFloat(formData.get('discountPrice')) : null;
-    const saleStartDate = formData.get('saleStartDate') ? new Date(formData.get('saleStartDate')) : null;
-    const saleEndDate = formData.get('saleEndDate') ? new Date(formData.get('saleEndDate')) : null;
+    const discountPriceRaw = formData.get('discountPrice');
+    const discountPrice = (discountPriceRaw && discountPriceRaw !== "") ? parseFloat(discountPriceRaw) : null;
+
+    const startDateRaw = formData.get('saleStartDate');
+    const saleStartDate = (startDateRaw && startDateRaw !== "") ? new Date(startDateRaw) : null;
+
+    const endDateRaw = formData.get('saleEndDate');
+    const saleEndDate = (endDateRaw && endDateRaw !== "") ? new Date(endDateRaw) : null;
 
     // Handle Auto-Gen or Manual Input
     let sku = formData.get('sku');
-    if (sku === 'AUTO' || !sku) sku = generateCode('SKU');
+    if (sku === 'AUTO' || !sku || sku === "") sku = generateCode('SKU');
     
     let barcode = formData.get('barcode');
-    if (barcode === 'AUTO' || !barcode) barcode = generateCode('BAR');
+    if (barcode === 'AUTO' || !barcode || barcode === "") barcode = generateCode('BAR');
 
     const tags = formData.getAll('tags');
     const images = formData.getAll('images'); 
@@ -242,18 +256,21 @@ export async function createProduct(formData) {
       name, slug, sku, barcode, description, price, 
       discountPrice, saleStartDate, saleEndDate,
       category, 
-      stock: totalStock, // Save global stock
-      variants,          // Save detailed breakdown
-      sizeGuide,         
+      stock: totalStock,
+      variants,
+      sizeGuide, 
       tags, 
       images: imagePaths 
     });
 
-    revalidatePath('/admin/products'); revalidatePath('/product'); 
+    revalidatePath('/admin/products'); 
+    revalidatePath('/product'); 
     return { success: true };
   } catch (error) {
     if (error.code === 11000) return { error: "SKU or Barcode already exists." };
     console.error("Create Product Error:", error); 
+    // Return explicit error if casting fails
+    if (error.name === 'CastError') return { error: "Invalid data format (Category or ID)." };
     return { error: "Failed to create product" };
   }
 }
@@ -291,7 +308,7 @@ export async function updateProduct(formData) {
         product.sizeGuide = undefined; // Unset if empty
     }
     
-    // 4. SKU & Barcode Logic (Critical Fix)
+    // 4. SKU & Barcode Logic
     const sku = formData.get('sku');
     if (sku === 'AUTO') {
         product.sku = generateCode('SKU');
@@ -306,10 +323,15 @@ export async function updateProduct(formData) {
         product.barcode = barcode;
     }
 
-    // 5. Offers
-    product.discountPrice = formData.get('discountPrice') ? parseFloat(formData.get('discountPrice')) : null;
-    product.saleStartDate = formData.get('saleStartDate') ? new Date(formData.get('saleStartDate')) : null;
-    product.saleEndDate = formData.get('saleEndDate') ? new Date(formData.get('saleEndDate')) : null;
+    // 5. Offers (Sanitize)
+    const discountPriceRaw = formData.get('discountPrice');
+    product.discountPrice = (discountPriceRaw && discountPriceRaw !== "") ? parseFloat(discountPriceRaw) : null;
+
+    const startDateRaw = formData.get('saleStartDate');
+    product.saleStartDate = (startDateRaw && startDateRaw !== "") ? new Date(startDateRaw) : null;
+
+    const endDateRaw = formData.get('saleEndDate');
+    product.saleEndDate = (endDateRaw && endDateRaw !== "") ? new Date(endDateRaw) : null;
 
     // 6. Tags
     product.tags = formData.getAll('tags');

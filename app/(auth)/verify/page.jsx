@@ -3,22 +3,23 @@
 import { verifyOtpAction } from "@/app/authActions";
 import { useState, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image"; // Import for logo
 import { Loader2, ShieldCheck, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // --- ANIMATION VARIANTS ---
 const containerVariants = {
-  hidden: { opacity: 0, scale: 0.95 },
+  hidden: { opacity: 0, scale: 0.98 },
   visible: { 
     opacity: 1, 
     scale: 1, 
-    transition: { staggerChildren: 0.1, delayChildren: 0.2, duration: 0.4 } 
+    transition: { staggerChildren: 0.1, delayChildren: 0.2, duration: 0.6, ease: [0.22, 1, 0.36, 1] } 
   }
 };
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 }
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
 };
 
 const shakeVariants = {
@@ -33,7 +34,7 @@ function VerifyForm() {
   
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState({ type: '', message: '' }); // type: 'error' | 'success' | ''
+  const [status, setStatus] = useState({ type: '', message: '' }); 
   const [timer, setTimer] = useState(30);
 
   // Countdown Timer for Resend
@@ -59,7 +60,6 @@ function VerifyForm() {
       setLoading(false);
     } else {
       setStatus({ type: 'success', message: 'Identity Verified. Redirecting...' });
-      // Short delay to show success animation before redirect
       setTimeout(() => router.push('/login?verified=true'), 1500);
     }
   };
@@ -69,26 +69,29 @@ function VerifyForm() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="bg-white p-8 md:p-12 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-gray-100 w-full max-w-md text-center relative z-10 overflow-hidden"
+      className="bg-white p-8 md:p-12 rounded-2xl shadow-2xl shadow-[#B91C1C]/5 border border-gray-100 w-full max-w-md text-center relative z-10 overflow-hidden"
     >
       {/* Decorative Top Glow */}
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent opacity-50"></div>
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#B91C1C] to-transparent opacity-50"></div>
 
-      {/* ICON */}
-      <motion.div variants={itemVariants} className="w-16 h-16 bg-[#D4AF37]/10 text-[#D4AF37] rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-sm border border-[#D4AF37]/20">
-        <ShieldCheck size={32} strokeWidth={1.5} />
+      {/* Header with Logo */}
+      <motion.div variants={itemVariants} className="flex flex-col items-center mb-8">
+         <div className="relative w-20 h-10 mb-6">
+            <Image src="/logo.png" alt="OURA" fill className="object-contain" priority />
+         </div>
+         <div className="w-14 h-14 bg-[#B91C1C]/5 text-[#B91C1C] rounded-full flex items-center justify-center shadow-sm border border-[#B91C1C]/10 mb-4">
+            <ShieldCheck size={28} strokeWidth={1.5} />
+         </div>
+         <h1 className="text-3xl font-bodoni font-medium text-gray-900 mb-2">
+           Verification
+         </h1>
+         <p className="text-gray-500 text-xs font-manrope tracking-wide leading-relaxed">
+           Please enter the 6-digit secure code sent to <br/> 
+           <span className="font-bold text-black border-b border-gray-200 pb-0.5">{email}</span>
+         </p>
       </motion.div>
 
-      {/* HEADER */}
-      <motion.h1 variants={itemVariants} className="text-3xl font-bodoni font-medium text-gray-900 mb-2">
-        Verification
-      </motion.h1>
-      <motion.p variants={itemVariants} className="text-gray-500 text-xs font-manrope tracking-wide mb-8 leading-relaxed">
-        Please enter the 6-digit secure code sent to <br/> 
-        <span className="font-bold text-black border-b border-gray-200 pb-0.5">{email}</span>
-      </motion.p>
-
-      {/* NOTIFICATION AREA (Smooth Animation) */}
+      {/* NOTIFICATION AREA */}
       <AnimatePresence mode="wait">
         {status.message && (
           <motion.div 
@@ -96,10 +99,10 @@ function VerifyForm() {
             variants={shakeVariants}
             initial="idle"
             animate={status.type === 'error' ? 'error' : 'idle'}
-            className={`px-4 py-3 rounded-xl mb-6 flex items-center justify-center gap-2 text-xs font-bold ${
+            className={`px-4 py-3 rounded-lg mb-6 flex items-center justify-center gap-2 text-xs font-bold ${
               status.type === 'success' 
-              ? 'bg-green-50 text-green-700 border border-green-100' 
-              : 'bg-red-50 text-red-600 border border-red-100'
+              ? 'bg-green-50 text-green-700 border border-green-200' 
+              : 'bg-red-50 text-[#B91C1C] border border-[#B91C1C]/20'
             }`}
           >
             {status.type === 'success' ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>}
@@ -115,13 +118,11 @@ function VerifyForm() {
           value={otp}
           onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))} 
           onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
-          className="w-full text-center text-3xl tracking-[0.6em] font-bodoni font-bold border-b border-gray-200 focus:border-[#D4AF37] outline-none py-4 bg-transparent transition-all placeholder:tracking-normal placeholder:font-manrope placeholder:text-xs placeholder:font-normal placeholder:text-gray-300 placeholder:uppercase" 
+          className="w-full text-center text-3xl tracking-[0.5em] font-bodoni font-bold border-b border-gray-200 focus:border-[#B91C1C] outline-none py-4 bg-transparent transition-all placeholder:tracking-normal placeholder:font-manrope placeholder:text-xs placeholder:font-normal placeholder:text-gray-300 placeholder:uppercase selection:bg-[#B91C1C] selection:text-white" 
           maxLength={6}
           placeholder="Enter Code"
           autoFocus
         />
-        {/* Animated Line underneath */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-[2px] bg-[#D4AF37] transition-all duration-500 group-focus-within:w-full"></div>
       </motion.div>
 
       {/* VERIFY BUTTON */}
@@ -129,7 +130,7 @@ function VerifyForm() {
         variants={itemVariants}
         onClick={handleVerify} 
         disabled={loading || otp.length < 6} 
-        className="w-full bg-black text-white h-14 rounded-xl font-bold uppercase text-xs tracking-[0.2em] hover:bg-[#D4AF37] hover:text-white disabled:opacity-50 disabled:hover:bg-black disabled:cursor-not-allowed flex justify-center items-center gap-3 transition-all duration-300 shadow-lg hover:shadow-[#D4AF37]/20"
+        className="w-full bg-black text-white h-14 rounded-xl font-bold uppercase text-xs tracking-[0.2em] hover:bg-[#B91C1C] hover:text-white disabled:opacity-50 disabled:hover:bg-black disabled:cursor-not-allowed flex justify-center items-center gap-3 transition-all duration-300 shadow-lg hover:shadow-[#B91C1C]/20 active:scale-[0.98]"
       >
         {loading ? <Loader2 className="animate-spin" size={18} /> : (
           <>Verify Identity <ArrowRight size={16} /></>
@@ -145,7 +146,7 @@ function VerifyForm() {
         ) : (
            <button 
              onClick={() => { setTimer(30); setStatus({ type: 'success', message: 'Code resent successfully.' }); setTimeout(() => setStatus({type:'', message:''}), 3000) }}
-             className="text-[10px] text-black font-bold uppercase tracking-widest border-b border-black hover:text-[#D4AF37] hover:border-[#D4AF37] transition-colors pb-0.5"
+             className="text-[10px] text-black font-bold uppercase tracking-widest border-b border-black hover:text-[#B91C1C] hover:border-[#B91C1C] transition-colors pb-0.5"
            >
              Resend Code
            </button>
@@ -158,16 +159,16 @@ function VerifyForm() {
 
 export default function VerifyPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#faf9f6] font-manrope relative overflow-hidden px-4">
+    <div className="min-h-screen flex items-center justify-center bg-white font-manrope relative overflow-hidden px-4 selection:bg-[#B91C1C] selection:text-white">
        
        {/* Background Ambience */}
-       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-[#faf9f6] to-[#faf9f6] z-0" />
-       <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-[#D4AF37]/5 rounded-full blur-[100px] pointer-events-none"></div>
+       <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] bg-[#B91C1C]/5 rounded-full blur-[150px]" />
+       <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-black/5 rounded-full blur-[100px]" />
 
        <Suspense fallback={
          <div className="animate-pulse flex flex-col items-center gap-4">
-            <div className="w-16 h-16 bg-gray-200 rounded-full"></div>
-            <div className="h-4 w-32 bg-gray-200 rounded"></div>
+            <div className="w-16 h-16 bg-gray-100 rounded-full"></div>
+            <div className="h-4 w-32 bg-gray-100 rounded"></div>
          </div>
        }>
          <VerifyForm />

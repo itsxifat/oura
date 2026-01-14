@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createOrder, saveAddress } from '@/app/actions';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, ArrowRight, MapPin, Truck, CreditCard, CheckCircle, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MapPin, Truck, CreditCard, CheckCircle, Loader2, Sparkles, AlertTriangle, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Barcode from 'react-barcode'; 
 
@@ -14,7 +14,7 @@ import Barcode from 'react-barcode';
 const Taka = ({ size = 14, className = "" }) => (
   <svg 
     width={size} 
-    height={size} 
+    height={size+2} 
     viewBox="0 0 24 24" 
     fill="none" 
     xmlns="http://www.w3.org/2000/svg" 
@@ -29,15 +29,52 @@ const Taka = ({ size = 14, className = "" }) => (
       fontSize="22" 
       fontWeight="bold" 
       fill="currentColor" 
-      style={{ fontFamily: "var(--font-heading)" }} 
+      style={{ fontFamily: "'Bodoni Moda', serif" }} 
     >
       ৳
     </text>
   </svg>
 );
 
+// --- FULL SCREEN SUCCESS ANIMATION ---
+const SuccessOverlay = () => (
+  <motion.div 
+    initial={{ opacity: 0 }} 
+    animate={{ opacity: 1 }} 
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-[200] bg-[#0a0a0a] flex flex-col items-center justify-center text-center p-6"
+  >
+    <motion.div 
+      initial={{ scale: 0 }} 
+      animate={{ scale: 1 }} 
+      transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.2 }}
+      className="w-24 h-24 bg-[#B91C1C] rounded-full flex items-center justify-center mb-8 shadow-[0_0_50px_rgba(185,28,28,0.5)]"
+    >
+      <Check size={48} className="text-white stroke-[3]" />
+    </motion.div>
+
+    <motion.h2 
+      initial={{ y: 20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ delay: 0.4 }}
+      className="font-heading font-black text-4xl md:text-6xl text-white uppercase tracking-tighter mb-4"
+    >
+      Order Confirmed
+    </motion.h2>
+
+    <motion.p 
+      initial={{ y: 20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ delay: 0.5 }}
+      className="text-gray-400 text-xs md:text-sm font-bold uppercase tracking-[0.25em]"
+    >
+      Redirecting to your orders...
+    </motion.p>
+  </motion.div>
+);
+
 // --- ERROR MODAL ---
-const ErrorModal = ({ error, onClose }) => {
+const ErrorModal = ({ error, onClose, actionLabel = "Return to Cart" }) => {
   if (!error) return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -52,7 +89,7 @@ const ErrorModal = ({ error, onClose }) => {
         <h3 className="font-heading font-black text-xl text-black uppercase mb-2">Order Issue</h3>
         <p className="text-xs text-neutral-500 mb-6 leading-relaxed font-medium">{error}</p>
         <button onClick={onClose} className="w-full bg-black text-white py-3 text-[10px] font-bold uppercase tracking-[0.25em] hover:bg-[#B91C1C] transition-colors">
-            Return to Cart
+            {actionLabel}
         </button>
       </motion.div>
     </div>
@@ -84,7 +121,10 @@ export default function CheckoutClient({ savedAddresses = [] }) {
   const router = useRouter();
   
   const [loading, setLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false); 
   const [errorMsg, setErrorMsg] = useState(null); 
+  const [authError, setAuthError] = useState(false); // Track auth errors specifically
+  
   const [useSavedAddress, setUseSavedAddress] = useState(savedAddresses.length > 0);
   const [selectedAddressId, setSelectedAddressId] = useState(savedAddresses[0]?._id || null);
   const [shippingMethod, setShippingMethod] = useState('inside');
@@ -104,18 +144,42 @@ export default function CheckoutClient({ savedAddresses = [] }) {
   const discountAmount = appliedCoupon ? appliedCoupon.amount : 0;
   const finalTotal = Math.max(0, cartSubTotal + shippingCost - discountAmount);
 
+  // Redirect if cart empty (unless success)
   useEffect(() => {
-    if (cart.length === 0) router.push('/cart');
-  }, [cart, router]);
+    if (cart.length === 0 && !isSuccess) router.push('/cart');
+  }, [cart, router, isSuccess]);
+
+  // Handle Success Redirect
+  useEffect(() => {
+    if (isSuccess) {
+        const timer = setTimeout(() => {
+            router.refresh();
+            router.push('/account/orders'); 
+        }, 3500); 
+        return () => clearTimeout(timer);
+    }
+  }, [isSuccess, router]);
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleErrorClose = () => {
+      setErrorMsg(null);
+      if (authError) {
+          router.push('/login'); // Redirect to login on auth error
+      } else {
+          // Stay on page for other errors, or push to cart if critical
+          // router.push('/cart'); 
+      }
+      setAuthError(false);
   };
 
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
+    setAuthError(false);
 
     let finalData = {};
     if (useSavedAddress && selectedAddressId) {
@@ -160,21 +224,34 @@ export default function CheckoutClient({ savedAddresses = [] }) {
 
     if (res.success) {
       clearCart();
-      router.refresh(); 
-      router.push('/account/orders'); 
+      setIsSuccess(true); 
     } else {
+      // Check for specific auth error message from backend
+      if (res.error && (res.error.includes("log in") || res.error.includes("Unauthorized"))) {
+          setAuthError(true);
+      }
       setErrorMsg(res.error || "Order failed. Please try again.");
       setLoading(false);
     }
   };
 
-  if (cart.length === 0) return null;
+  if (cart.length === 0 && !isSuccess) return null;
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-6 font-sans bg-white min-h-screen">
       
       <AnimatePresence>
-        {errorMsg && <ErrorModal error={errorMsg} onClose={() => { setErrorMsg(null); router.push('/cart'); }} />}
+        {isSuccess && <SuccessOverlay />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {errorMsg && (
+            <ErrorModal 
+                error={errorMsg} 
+                onClose={handleErrorClose} 
+                actionLabel={authError ? "Log In" : "Close"} 
+            />
+        )}
       </AnimatePresence>
 
       {/* --- HEADER --- */}
@@ -196,7 +273,7 @@ export default function CheckoutClient({ savedAddresses = [] }) {
 
       <form onSubmit={handlePlaceOrder} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
-        {/* --- LEFT COLUMN: DETAILS (Compact Form) --- */}
+        {/* --- LEFT COLUMN: DETAILS --- */}
         <div className="lg:col-span-7 space-y-8">
           
           {/* 1. SHIPPING INFO */}
@@ -296,7 +373,7 @@ export default function CheckoutClient({ savedAddresses = [] }) {
                Order Review ({cart.length})
              </h2>
              
-             {/* LIST CONTAINER WITH PADDING-TOP TO FIX BADGE CUTOFF */}
+             {/* LIST CONTAINER WITH PADDING-TOP (Fixes Badge Cutoff) */}
              <div className="space-y-4 mb-6 max-h-[50vh] overflow-y-auto pt-4 pr-2 custom-scrollbar border-b border-dashed border-neutral-200 pb-4">
                 {cart.map((item) => {
                    const itemPrice = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
@@ -314,7 +391,7 @@ export default function CheckoutClient({ savedAddresses = [] }) {
                                     className="object-cover"
                                 />
                             </div>
-                            {/* Count Badge positioned relative to image wrapper */}
+                            {/* Count Badge (Floating outside container) */}
                             <span className="absolute -top-2 -right-2 bg-black text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-md z-10">
                                 {item.quantity}
                             </span>

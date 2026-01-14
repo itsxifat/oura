@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // --- STAT CARD COMPONENT ---
 const StatCard = ({ label, value, icon: Icon, color }) => (
-  <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[140px] flex-1 md:flex-none">
+  <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between min-w-[140px] flex-1 md:flex-none">
     <div>
       <p className="text-[9px] md:text-[10px] uppercase text-gray-400 font-bold tracking-widest">{label}</p>
       <p className="text-xl md:text-2xl font-bodoni text-gray-900 mt-1">{value}</p>
@@ -85,14 +85,14 @@ export default function UserClient({ initialUsers }) {
         {/* --- HEADER --- */}
         <div className="flex flex-col xl:flex-row justify-between xl:items-end mb-8 border-b border-gray-200 pb-8 gap-6">
           <div>
-            <span className="text-[#D4AF37] font-bold uppercase tracking-[0.3em] text-xs">Community</span>
+            <span className="text-[#800000] font-bold uppercase tracking-[0.3em] text-[10px]">Community</span>
             <h1 className="font-bodoni text-3xl md:text-5xl mt-2 text-black">User Management</h1>
             <p className="text-gray-400 text-xs mt-2 font-medium tracking-wide">Control access, roles, and user security.</p>
           </div>
           
           <div className="flex flex-wrap gap-3 w-full xl:w-auto">
              <StatCard label="Users" value={totalCount} icon={UserIcon} color="bg-gray-100 text-gray-600" />
-             <StatCard label="Admins" value={adminCount} icon={Shield} color="bg-[#D4AF37]/10 text-[#D4AF37]" />
+             <StatCard label="Admins" value={adminCount} icon={Shield} color="bg-[#800000]/10 text-[#800000]" />
              <StatCard label="Restricted" value={bannedCount} icon={Ban} color="bg-red-50 text-red-500" />
           </div>
         </div>
@@ -105,16 +105,20 @@ export default function UserClient({ initialUsers }) {
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                 placeholder="Search name or email..." 
-                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-[#D4AF37] rounded-xl text-sm outline-none transition-all"
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent focus:bg-white focus:border-[#800000] rounded-xl text-sm outline-none transition-all placeholder:text-gray-400"
               />
            </div>
 
-           <div className="flex bg-gray-50 p-1 rounded-xl w-full md:w-auto overflow-x-auto no-scrollbar">
+           <div className="flex bg-gray-50 p-1.5 rounded-xl w-full md:w-auto overflow-x-auto no-scrollbar border border-gray-100">
               {['all', 'admin', 'user'].map((role) => (
                  <button
                    key={role}
                    onClick={() => { setFilterRole(role); setCurrentPage(1); }}
-                   className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${filterRole === role ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                   className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
+                     filterRole === role 
+                     ? 'bg-[#800000] text-white shadow-md' 
+                     : 'text-gray-400 hover:text-[#800000] hover:bg-white'
+                   }`}
                  >
                    {role}
                  </button>
@@ -126,7 +130,7 @@ export default function UserClient({ initialUsers }) {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-[400px]">
            
            {/* DESKTOP HEADER */}
-           <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-100 bg-[#faf9f6]/50 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+           <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-100 bg-[#faf9f6] text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
               <div className="col-span-4 pl-2">User Identity</div>
               <div className="col-span-3">Contact</div>
               <div className="col-span-2 text-center">Status</div>
@@ -135,112 +139,114 @@ export default function UserClient({ initialUsers }) {
 
            <div className="flex-1">
              {paginatedUsers.length === 0 ? (
-               <div className="h-full flex flex-col items-center justify-center text-gray-300 py-20">
-                  <UserIcon size={48} className="mb-4 opacity-20"/>
-                  <span className="uppercase tracking-widest text-xs font-bold">No users found</span>
+               <div className="h-full flex flex-col items-center justify-center text-gray-300 py-20 bg-gray-50/30">
+                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-gray-100">
+                     <UserIcon size={32} className="opacity-20 text-black"/>
+                  </div>
+                  <span className="uppercase tracking-widest text-xs font-bold text-gray-400">No users found</span>
                </div>
              ) : (
                paginatedUsers.map((user) => (
                  <div key={user._id} className="group border-b border-gray-50 last:border-0 hover:bg-[#faf9f6] transition-colors relative">
-                    
-                    {/* --- DESKTOP ROW --- */}
-                    <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 items-center">
-                        <div className="col-span-4 flex items-center gap-4">
-                           <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold border-2 ${user.role === 'admin' ? 'border-[#D4AF37] text-[#D4AF37] bg-[#D4AF37]/5' : 'border-gray-100 text-gray-400 bg-gray-50'} overflow-hidden`}>
-                              {user.image ? (
-                                 <img 
+                   
+                   {/* --- DESKTOP ROW --- */}
+                   <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 items-center">
+                       <div className="col-span-4 flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold border-2 ${user.role === 'admin' ? 'border-[#800000] text-[#800000] bg-[#800000]/5' : 'border-gray-100 text-gray-400 bg-gray-50'} overflow-hidden`}>
+                             {user.image ? (
+                                <img 
                                    src={user.image} 
                                    alt={user.name} 
                                    className="w-full h-full object-cover" 
-                                   referrerPolicy="no-referrer" // FIX FOR GOOGLE IMAGES
-                                 />
-                              ) : (
-                                 (user.name?.charAt(0) || 'U').toUpperCase()
-                              )}
-                           </div>
-                           <div className="min-w-0">
-                              <h4 className="font-bodoni font-bold text-gray-900 flex items-center gap-2 truncate">
-                                 {user.name || 'Unknown'}
-                                 {user.role === 'admin' && <Shield size={12} className="text-[#D4AF37] fill-[#D4AF37] flex-shrink-0"/>}
-                              </h4>
-                              <p className="text-[10px] text-gray-400 uppercase tracking-wider truncate">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
-                           </div>
-                        </div>
+                                   referrerPolicy="no-referrer" 
+                                />
+                             ) : (
+                                (user.name?.charAt(0) || 'U').toUpperCase()
+                             )}
+                          </div>
+                          <div className="min-w-0">
+                             <h4 className="font-bodoni font-bold text-gray-900 flex items-center gap-2 truncate group-hover:text-[#800000] transition-colors">
+                                {user.name || 'Unknown'}
+                                {user.role === 'admin' && <Shield size={12} className="text-[#D4AF37] fill-[#D4AF37] flex-shrink-0"/>}
+                             </h4>
+                             <p className="text-[10px] text-gray-400 uppercase tracking-wider truncate">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
+                          </div>
+                       </div>
 
-                        <div className="col-span-3 space-y-1 min-w-0">
-                           <div className="flex items-center gap-2 text-xs text-gray-600 font-medium truncate">
-                              <Mail size={12} className="text-gray-300 flex-shrink-0"/> <span className="truncate">{user.email}</span>
-                           </div>
-                           {user.phone && (
-                              <div className="flex items-center gap-2 text-xs text-gray-500 truncate">
-                                 <Phone size={12} className="text-gray-300 flex-shrink-0"/> {user.phone}
-                              </div>
-                           )}
-                        </div>
+                       <div className="col-span-3 space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 text-xs text-gray-600 font-medium truncate">
+                             <Mail size={12} className="text-[#D4AF37] flex-shrink-0"/> <span className="truncate">{user.email}</span>
+                          </div>
+                          {user.phone && (
+                             <div className="flex items-center gap-2 text-xs text-gray-500 truncate">
+                                <Phone size={12} className="text-gray-300 flex-shrink-0"/> {user.phone}
+                             </div>
+                          )}
+                       </div>
 
-                        <div className="col-span-2 flex justify-center gap-2">
-                           {user.isBanned ? (
-                              <span className="px-2 py-1 bg-red-50 text-red-600 text-[9px] font-bold uppercase rounded flex items-center gap-1 border border-red-100"><Ban size={10}/> Banned</span>
-                           ) : (
-                              <span className="px-2 py-1 bg-green-50 text-green-600 text-[9px] font-bold uppercase rounded flex items-center gap-1 border border-green-100"><CheckCircle2 size={10}/> Active</span>
-                           )}
-                        </div>
+                       <div className="col-span-2 flex justify-center gap-2">
+                          {user.isBanned ? (
+                             <span className="px-2 py-1 bg-red-50 text-red-600 text-[9px] font-bold uppercase rounded flex items-center gap-1 border border-red-100"><Ban size={10}/> Banned</span>
+                          ) : (
+                             <span className="px-2 py-1 bg-green-50 text-green-600 text-[9px] font-bold uppercase rounded flex items-center gap-1 border border-green-100"><CheckCircle2 size={10}/> Active</span>
+                          )}
+                       </div>
 
-                        <div className="col-span-3 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                           <ActionButton user={user} isLoading={isLoading} handleAction={handleAction} />
-                        </div>
-                    </div>
+                       <div className="col-span-3 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ActionButton user={user} isLoading={isLoading} handleAction={handleAction} />
+                       </div>
+                   </div>
 
-                    {/* --- MOBILE CARD --- */}
-                    <div className="md:hidden p-4 flex items-center justify-between">
-                       <div className="flex items-center gap-4 min-w-0">
-                          <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-lg font-bold border-2 ${user.role === 'admin' ? 'border-[#D4AF37] text-[#D4AF37] bg-[#D4AF37]/5' : 'border-gray-100 text-gray-400 bg-gray-50'} overflow-hidden`}>
-                              {user.image ? (
-                                <img 
+                   {/* --- MOBILE CARD --- */}
+                   <div className="md:hidden p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-4 min-w-0">
+                         <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-lg font-bold border-2 ${user.role === 'admin' ? 'border-[#800000] text-[#800000] bg-[#800000]/5' : 'border-gray-100 text-gray-400 bg-gray-50'} overflow-hidden`}>
+                            {user.image ? (
+                               <img 
                                   src={user.image} 
                                   alt={user.name} 
                                   className="w-full h-full object-cover" 
-                                  referrerPolicy="no-referrer" // FIX FOR GOOGLE IMAGES
-                                />
-                              ) : (
-                                (user.name?.charAt(0) || 'U').toUpperCase()
-                              )}
-                          </div>
-                          <div className="min-w-0">
-                             <div className="flex items-center gap-2">
-                                <h4 className="font-bodoni font-bold text-gray-900 truncate">{user.name || 'Unknown'}</h4>
-                                {user.role === 'admin' && <Shield size={12} className="text-[#D4AF37] fill-[#D4AF37]"/>}
-                                {user.isBanned && <Ban size={12} className="text-red-500"/>}
-                             </div>
-                             <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                             <div className="flex gap-2 mt-1">
-                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${user.role === 'admin' ? 'bg-black text-white border-black' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>{user.role}</span>
-                             </div>
-                          </div>
-                       </div>
-                       
-                       {/* Mobile Menu Trigger */}
-                       <div className="relative">
-                          <button onClick={() => setMobileMenuOpen(mobileMenuOpen === user._id ? null : user._id)} className="p-2 text-gray-400 hover:text-black">
-                             <MoreVertical size={20}/>
-                          </button>
-                          
-                          <AnimatePresence>
-                             {mobileMenuOpen === user._id && (
-                                <motion.div 
-                                  initial={{opacity:0, scale:0.9}} animate={{opacity:1, scale:1}} exit={{opacity:0, scale:0.9}}
+                                  referrerPolicy="no-referrer"
+                               />
+                            ) : (
+                               (user.name?.charAt(0) || 'U').toUpperCase()
+                            )}
+                         </div>
+                         <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                               <h4 className="font-bodoni font-bold text-gray-900 truncate">{user.name || 'Unknown'}</h4>
+                               {user.role === 'admin' && <Shield size={12} className="text-[#D4AF37] fill-[#D4AF37]"/>}
+                               {user.isBanned && <Ban size={12} className="text-red-500"/>}
+                            </div>
+                            <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                            <div className="flex gap-2 mt-1">
+                               <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${user.role === 'admin' ? 'bg-[#800000] text-white border-[#800000]' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>{user.role}</span>
+                            </div>
+                         </div>
+                      </div>
+                      
+                      {/* Mobile Menu Trigger */}
+                      <div className="relative">
+                         <button onClick={() => setMobileMenuOpen(mobileMenuOpen === user._id ? null : user._id)} className="p-2 text-gray-400 hover:text-black">
+                            <MoreVertical size={20}/>
+                         </button>
+                         
+                         <AnimatePresence>
+                            {mobileMenuOpen === user._id && (
+                               <motion.div 
+                                  initial={{opacity:0, scale:0.95}} animate={{opacity:1, scale:1}} exit={{opacity:0, scale:0.95}}
                                   className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-xl border border-gray-100 z-10 overflow-hidden"
-                                >
-                                   <div className="flex flex-col p-1">
-                                      <MobileActionBtn icon={user.role==='admin'?ShieldAlert:Shield} label={user.role==='admin'?"Demote":"Promote"} onClick={() => handleAction('role', user._id, user.role)} />
-                                      <MobileActionBtn icon={Ban} label={user.isBanned?"Unban":"Ban User"} onClick={() => handleAction('ban', user._id, user.isBanned)} color="text-orange-500 hover:bg-orange-50" />
-                                      <MobileActionBtn icon={Trash2} label="Delete" onClick={() => handleAction('delete', user._id)} color="text-red-500 hover:bg-red-50" />
-                                   </div>
-                                </motion.div>
-                             )}
-                          </AnimatePresence>
-                       </div>
-                    </div>
+                               >
+                                  <div className="flex flex-col p-1">
+                                     <MobileActionBtn icon={user.role==='admin'?ShieldAlert:Shield} label={user.role==='admin'?"Demote":"Promote"} onClick={() => handleAction('role', user._id, user.role)} />
+                                     <MobileActionBtn icon={Ban} label={user.isBanned?"Unban":"Ban User"} onClick={() => handleAction('ban', user._id, user.isBanned)} color="text-orange-500 hover:bg-orange-50" />
+                                     <MobileActionBtn icon={Trash2} label="Delete" onClick={() => handleAction('delete', user._id)} color="text-red-500 hover:bg-red-50" />
+                                  </div>
+                               </motion.div>
+                            )}
+                         </AnimatePresence>
+                      </div>
+                   </div>
 
                  </div>
                ))
@@ -254,7 +260,7 @@ export default function UserClient({ initialUsers }) {
               </span>
               <div className="flex gap-2">
                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} className="p-2 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16}/></button>
-                 <span className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-xs font-bold flex items-center">Page {currentPage}</span>
+                 <span className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-xs font-bold flex items-center text-gray-600">Page {currentPage}</span>
                  <button disabled={currentPage >= totalPages || totalPages === 0} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} className="p-2 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronRight size={16}/></button>
               </div>
            </div>
@@ -269,20 +275,35 @@ export default function UserClient({ initialUsers }) {
 
 const ActionButton = ({ user, isLoading, handleAction }) => (
   <>
-    <button onClick={() => handleAction('role', user._id, user.role)} disabled={isLoading === user._id} className="w-8 h-8 rounded-full border border-gray-200 text-gray-400 hover:text-black hover:border-black flex items-center justify-center transition-all bg-white" title="Change Role">
+    <button 
+        onClick={() => handleAction('role', user._id, user.role)} 
+        disabled={isLoading === user._id} 
+        className="w-8 h-8 rounded-lg border border-gray-200 text-gray-400 hover:text-[#800000] hover:border-[#800000] hover:bg-[#800000]/5 flex items-center justify-center transition-all bg-white shadow-sm" 
+        title="Change Role"
+    >
       {isLoading === user._id ? <Loader2 size={14} className="animate-spin"/> : <ShieldAlert size={14}/>}
     </button>
-    <button onClick={() => handleAction('ban', user._id, user.isBanned)} disabled={isLoading === user._id} className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all bg-white ${user.isBanned ? 'border-green-200 text-green-600 hover:bg-green-50' : 'border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200'}`} title={user.isBanned ? "Unban" : "Ban"}>
+    <button 
+        onClick={() => handleAction('ban', user._id, user.isBanned)} 
+        disabled={isLoading === user._id} 
+        className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all bg-white shadow-sm ${user.isBanned ? 'border-green-200 text-green-600 hover:bg-green-50' : 'border-gray-200 text-gray-400 hover:text-orange-500 hover:border-orange-200 hover:bg-orange-50'}`} 
+        title={user.isBanned ? "Unban" : "Ban"}
+    >
       <Ban size={14}/>
     </button>
-    <button onClick={() => handleAction('delete', user._id)} disabled={isLoading === user._id} className="w-8 h-8 rounded-full border border-gray-200 text-gray-400 hover:text-white hover:bg-red-500 hover:border-red-500 flex items-center justify-center transition-all bg-white" title="Delete">
+    <button 
+        onClick={() => handleAction('delete', user._id)} 
+        disabled={isLoading === user._id} 
+        className="w-8 h-8 rounded-lg border border-gray-200 text-gray-400 hover:text-white hover:bg-red-600 hover:border-red-600 flex items-center justify-center transition-all bg-white shadow-sm" 
+        title="Delete"
+    >
       <Trash2 size={14}/>
     </button>
   </>
 );
 
 const MobileActionBtn = ({ icon: Icon, label, onClick, color = "text-gray-600 hover:bg-gray-50" }) => (
-  <button onClick={onClick} className={`flex items-center gap-3 px-4 py-3 text-xs font-bold uppercase tracking-wider text-left transition-colors rounded-lg ${color}`}>
+  <button onClick={onClick} className={`flex items-center gap-3 px-4 py-3 text-xs font-bold uppercase tracking-wider text-left transition-colors rounded-lg w-full ${color}`}>
     <Icon size={16}/> {label}
   </button>
 );

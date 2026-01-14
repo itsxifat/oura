@@ -1,4 +1,4 @@
-// anaqa/models/Hero.js
+// oura/models/Hero.js
 import mongoose from 'mongoose';
 
 const HeroSchema = new mongoose.Schema({

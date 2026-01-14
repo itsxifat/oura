@@ -24,6 +24,9 @@ const UserSchema = new mongoose.Schema({
   isBanned: { type: Boolean, default: false },
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
+  emailChangeOTP: { type: String },
+  emailChangeOTPExpires: { type: Date },
+  pendingNewEmail: { type: String },
 }, { timestamps: true });
 
 export default mongoose.models.User || mongoose.model('User', UserSchema);

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Camera, Save, Loader2, User, Phone, Mail, Lock, Shield, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
+// ✅ FIX: Added 'Info' to imports
+import { X, Camera, Save, Loader2, User, Phone, Mail, Lock, Shield, CheckCircle, AlertCircle, ChevronRight, KeyRound, Info } from 'lucide-react';
 import { updateUserProfile, changePassword, initiateEmailChange, verifyEmailChangeOTP } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession } from "next-auth/react";
@@ -44,12 +45,12 @@ const createImage = (url) =>
     image.src = url;
   });
 
-// --- REUSABLE TOAST INSIDE MODAL ---
+// --- REUSABLE TOAST ---
 const ModalToast = ({ message, type }) => (
   <motion.div 
-    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-    className={`absolute top-4 left-4 right-16 p-3 rounded-lg flex items-center gap-3 text-xs font-bold uppercase tracking-wide shadow-sm z-50 ${
-      type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+    initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+    className={`absolute top-6 left-6 right-16 p-3 rounded-lg flex items-center gap-3 text-xs font-bold uppercase tracking-wide shadow-sm z-50 ${
+      type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-[#B91C1C] border border-[#B91C1C]/20'
     }`}
   >
     {type === 'success' ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
@@ -59,7 +60,7 @@ const ModalToast = ({ message, type }) => (
 
 export default function EditProfileModal({ user, isOpen, onClose, userHasPassword }) {
   const { update } = useSession();
-  const [activeTab, setActiveTab] = useState('general'); // 'general' | 'security'
+  const [activeTab, setActiveTab] = useState('general');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -116,15 +117,17 @@ export default function EditProfileModal({ user, isOpen, onClose, userHasPasswor
     setLoading(false);
   };
 
-  // --- 2. PASSWORD HANDLER ---
+  // --- 2. PASSWORD HANDLER (Hybrid Support) ---
   const handlePasswordUpdate = async (e) => {
     e.preventDefault();
     setLoading(true);
     const formData = new FormData(e.target);
     const res = await changePassword(formData);
     if (res.success) {
-      showToast('Password Changed', 'success');
+      showToast('Password Updated Successfully', 'success');
       e.target.reset();
+      // Optionally reload to update userHasPassword state if needed, 
+      // or rely on next session check
     } else {
       showToast(res.error, 'error');
     }
@@ -138,13 +141,12 @@ export default function EditProfileModal({ user, isOpen, onClose, userHasPasswor
     const formData = new FormData(e.target);
     const emailInput = formData.get('newEmail');
     
-    // Logic updated in actions.js to allow skipping password if userHasPassword is false
     const res = await initiateEmailChange(formData);
     
     if (res.success) {
       setPendingEmail(emailInput);
       setEmailStep(2);
-      showToast('OTP Sent', 'success');
+      showToast('Verification Code Sent', 'success');
     } else {
       showToast(res.error, 'error');
     }
@@ -158,8 +160,9 @@ export default function EditProfileModal({ user, isOpen, onClose, userHasPasswor
     formData.append('newEmail', pendingEmail);
     const res = await verifyEmailChangeOTP(formData);
     if (res.success) {
-      showToast('Email Updated! Reloading...', 'success');
-      setTimeout(() => window.location.reload(), 1500);
+      showToast('Email Changed! Please login again.', 'success');
+      // Force logout as session email is now invalid
+      setTimeout(() => window.location.href = '/login', 2000);
     } else {
       showToast(res.error, 'error');
     }
@@ -181,154 +184,174 @@ export default function EditProfileModal({ user, isOpen, onClose, userHasPasswor
                  <div className="relative flex-1 bg-black">
                     <Cropper image={cropSrc} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={(a, b) => setCroppedAreaPixels(b)} onZoomChange={setZoom} cropShape="round" showGrid={false} />
                  </div>
-                 <div className="p-4 bg-white flex justify-end gap-3">
-                    <button onClick={() => setCropSrc(null)} className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-500">Cancel</button>
-                    <button onClick={performCrop} className="px-6 py-2 bg-black text-white text-xs font-bold uppercase tracking-widest rounded-lg">Apply</button>
+                 <div className="p-4 bg-white flex justify-end gap-3 border-t border-gray-100">
+                    <button onClick={() => setCropSrc(null)} className="px-6 py-3 text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-black transition-colors">Cancel</button>
+                    <button onClick={performCrop} className="px-8 py-3 bg-[#B91C1C] text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-black transition-colors shadow-lg">Apply</button>
                  </div>
               </div>
             ) : (
               
               /* --- MAIN MODAL --- */
-              <div className="bg-white w-full max-w-2xl h-[90vh] max-h-[700px] rounded-2xl shadow-2xl pointer-events-auto flex flex-col md:flex-row overflow-hidden relative">
+              <div className="bg-white w-full max-w-4xl h-[85vh] max-h-[650px] rounded-2xl shadow-2xl pointer-events-auto flex flex-col md:flex-row overflow-hidden relative">
                 
                 {/* Close Button */}
-                <button onClick={onClose} className="absolute top-4 right-4 z-20 p-2 hover:bg-gray-100 rounded-full transition text-gray-400 hover:text-black"><X size={20}/></button>
+                <button onClick={onClose} className="absolute top-4 right-4 z-20 p-2 hover:bg-gray-50 rounded-full transition text-gray-400 hover:text-[#B91C1C]"><X size={20}/></button>
                 {/* Toast */}
                 <AnimatePresence>{toast && <ModalToast message={toast.msg} type={toast.type} />}</AnimatePresence>
 
-                {/* LEFT SIDEBAR (Tabs) */}
-                <div className="w-full md:w-64 bg-gray-50 border-r border-gray-100 flex flex-col shrink-0">
-                   <div className="p-8 pb-4 text-center border-b border-gray-100">
-                      <div className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-3 border-2 border-white shadow-md">
+                {/* LEFT SIDEBAR */}
+                <div className="w-full md:w-72 bg-gray-50/50 border-r border-gray-100 flex flex-col shrink-0">
+                   <div className="p-8 pb-6 text-center border-b border-gray-100 bg-white">
+                      <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-4 border-4 border-gray-50 shadow-inner group relative">
                          <img src={currentImageSrc} alt="" className="w-full h-full object-cover"/>
                       </div>
-                      <h3 className="font-bodoni font-bold text-gray-900 truncate">{user.name}</h3>
-                      <p className="text-[10px] uppercase tracking-widest text-gray-400">Settings</p>
+                      <h3 className="font-bodoni text-xl font-bold text-gray-900 truncate px-2">{user.name}</h3>
+                      <p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Manage Account</p>
                    </div>
-                   <nav className="flex-1 p-4 space-y-1">
-                      <button onClick={() => setActiveTab('general')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'general' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:bg-white/50 hover:text-gray-600'}`}>
+                   <nav className="flex-1 p-6 space-y-2">
+                      <button onClick={() => setActiveTab('general')} className={`w-full flex items-center gap-4 px-5 py-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-all duration-300 ${activeTab === 'general' ? 'bg-black text-white shadow-lg shadow-black/10 translate-x-1' : 'text-gray-400 hover:bg-white hover:text-[#B91C1C]'}`}>
                          <User size={16} /> General
                       </button>
-                      <button onClick={() => setActiveTab('security')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'security' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:bg-white/50 hover:text-gray-600'}`}>
+                      <button onClick={() => setActiveTab('security')} className={`w-full flex items-center gap-4 px-5 py-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-all duration-300 ${activeTab === 'security' ? 'bg-black text-white shadow-lg shadow-black/10 translate-x-1' : 'text-gray-400 hover:bg-white hover:text-[#B91C1C]'}`}>
                          <Shield size={16} /> Security
                       </button>
                    </nav>
                 </div>
 
-                {/* RIGHT CONTENT AREA */}
-                <div className="flex-1 overflow-y-auto p-8 relative bg-white">
+                {/* RIGHT CONTENT */}
+                <div className="flex-1 overflow-y-auto p-8 md:p-12 bg-white relative custom-scrollbar">
                    
                    {/* --- TAB: GENERAL --- */}
                    {activeTab === 'general' && (
-                     <form onSubmit={handleProfileUpdate} className="space-y-6 max-w-sm mx-auto pt-4">
-                        <div className="text-center mb-8">
-                           <h2 className="font-bodoni text-2xl">Edit Profile</h2>
-                           <p className="text-xs text-gray-400">Update your personal details.</p>
+                     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="max-w-md mx-auto pt-2">
+                        <div className="mb-10">
+                           <h2 className="font-bodoni text-3xl text-gray-900 mb-2">Edit Profile</h2>
+                           <p className="text-xs text-gray-400 uppercase tracking-wide">Update your personal details below.</p>
                         </div>
 
-                        {/* Photo Change Trigger */}
-                        <div className="flex justify-center mb-6">
-                           <label className="cursor-pointer group relative">
-                              <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-100 group-hover:border-[#D4AF37] transition-colors">
+                        <form onSubmit={handleProfileUpdate} className="space-y-8">
+                           <div className="flex items-center gap-6 p-4 border border-dashed border-gray-200 rounded-xl bg-gray-50/30">
+                              <div className="w-16 h-16 rounded-full overflow-hidden border border-gray-200 shrink-0">
                                  <img src={currentImageSrc} className="w-full h-full object-cover" alt="Avatar"/>
                               </div>
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                                 <Camera className="text-white" size={20}/>
+                              <div>
+                                 <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:border-[#B91C1C] hover:text-[#B91C1C] transition-colors shadow-sm">
+                                    <Camera size={14}/> Change Photo
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                                 </label>
+                                 <p className="text-[10px] text-gray-400 mt-2">JPG, PNG or GIF. Max 1MB.</p>
                               </div>
-                              <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-                           </label>
-                        </div>
-
-                        <div className="space-y-4">
-                           <div>
-                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Full Name</label>
-                              <input name="name" defaultValue={user.name} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm font-medium focus:bg-white focus:border-black outline-none transition-all" />
                            </div>
-                           <div>
-                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Phone</label>
-                              <input name="phone" defaultValue={user.phone} placeholder="+123..." className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm font-medium focus:bg-white focus:border-black outline-none transition-all" />
-                           </div>
-                        </div>
 
-                        <div className="pt-4">
-                           <button disabled={loading} className="w-full py-3 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-900 disabled:opacity-70 flex items-center justify-center gap-2">
-                              {loading ? <Loader2 size={14} className="animate-spin"/> : <><Save size={14}/> Save Changes</>}
-                           </button>
-                        </div>
-                     </form>
+                           <div className="space-y-5">
+                              <div>
+                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Full Name</label>
+                                 <div className="relative">
+                                    <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                    <input name="name" defaultValue={user.name} className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-12 pr-4 py-3.5 text-sm font-medium focus:bg-white focus:border-[#B91C1C] focus:ring-1 focus:ring-[#B91C1C] outline-none transition-all placeholder:text-gray-300" />
+                                 </div>
+                              </div>
+                              <div>
+                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Phone Number</label>
+                                 <div className="relative">
+                                    <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                    <input name="phone" defaultValue={user.phone} placeholder="+123..." className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-12 pr-4 py-3.5 text-sm font-medium focus:bg-white focus:border-[#B91C1C] focus:ring-1 focus:ring-[#B91C1C] outline-none transition-all placeholder:text-gray-300" />
+                                 </div>
+                              </div>
+                           </div>
+
+                           <div className="pt-6 border-t border-gray-50">
+                              <button disabled={loading} className="w-full py-4 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-[0.2em] hover:bg-[#B91C1C] transition-colors disabled:opacity-70 flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] duration-200">
+                                 {loading ? <Loader2 size={16} className="animate-spin"/> : <><Save size={16}/> Save Changes</>}
+                              </button>
+                           </div>
+                        </form>
+                     </motion.div>
                    )}
 
                    {/* --- TAB: SECURITY --- */}
                    {activeTab === 'security' && (
-                     <div className="max-w-sm mx-auto pt-4 space-y-12">
-                        <div className="text-center mb-4">
-                           <h2 className="font-bodoni text-2xl">Security</h2>
-                           <p className="text-xs text-gray-400">Manage password and email.</p>
+                     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="max-w-md mx-auto pt-2 space-y-10">
+                        <div className="mb-6">
+                           <h2 className="font-bodoni text-3xl text-gray-900 mb-2">Security</h2>
+                           <p className="text-xs text-gray-400 uppercase tracking-wide">Manage password and contact info.</p>
                         </div>
 
-                        {/* 1. CHANGE PASSWORD */}
-                        {userHasPassword ? (
-                            <form onSubmit={handlePasswordUpdate} className="space-y-4 border-b border-gray-100 pb-8">
-                               <h3 className="text-sm font-bold flex items-center gap-2"><Lock size={14}/> Change Password</h3>
-                               <input type="password" name="currentPassword" placeholder="Current Password" required className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-black outline-none" />
-                               <div className="grid grid-cols-2 gap-2">
-                                  <input type="password" name="newPassword" placeholder="New Password" required className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-black outline-none" />
-                                  <input type="password" name="confirmPassword" placeholder="Confirm" required className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-black outline-none" />
-                               </div>
-                               <button disabled={loading} className="w-full py-3 bg-white border border-gray-200 text-black hover:bg-black hover:text-white transition-colors rounded-lg text-xs font-bold uppercase tracking-widest">
-                                  {loading ? 'Updating...' : 'Update Password'}
-                               </button>
-                            </form>
-                        ) : (
-                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center mb-8">
-                                <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-2">
-                                    <Shield size={18} />
+                        {/* 1. CHANGE PASSWORD (HYBRID SUPPORT) */}
+                        <div className="space-y-6">
+                           <h3 className="text-xs font-bold uppercase tracking-widest text-[#B91C1C] border-b border-gray-100 pb-2 flex items-center gap-2">
+                              <Lock size={14}/> {userHasPassword ? 'Change Password' : 'Set Password'}
+                           </h3>
+                           
+                           {/* ✅ FIX: Always allow form, just hide 'Current Password' if no password exists */}
+                           <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                              {userHasPassword && (
+                                <div className="relative">
+                                    <KeyRound size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                    <input type="password" name="currentPassword" placeholder="Current Password" required className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-12 pr-4 py-3.5 text-sm focus:border-[#B91C1C] focus:bg-white outline-none transition-all" />
                                 </div>
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-blue-800 mb-1">Google Account</h4>
-                                <p className="text-xs text-blue-600 leading-relaxed">
-                                    You are logged in via Google. Your password is managed by Google.
-                                </p>
-                            </div>
-                        )}
+                              )}
+                              <div className="grid grid-cols-2 gap-3">
+                                 <input type="password" name="newPassword" placeholder="New Password" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm focus:border-[#B91C1C] focus:bg-white outline-none transition-all" />
+                                 <input type="password" name="confirmPassword" placeholder="Confirm" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm focus:border-[#B91C1C] focus:bg-white outline-none transition-all" />
+                              </div>
+                              <button disabled={loading} className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 hover:border-black hover:text-black transition-colors rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2">
+                                 {loading ? <Loader2 size={14} className="animate-spin"/> : (userHasPassword ? 'Update Password' : 'Set Password')}
+                              </button>
+                           </form>
+                        </div>
 
                         {/* 2. CHANGE EMAIL */}
-                        <div>
-                           <h3 className="text-sm font-bold flex items-center gap-2 mb-4"><Mail size={14}/> Change Email</h3>
+                        <div className="space-y-6 pt-4">
+                           <h3 className="text-xs font-bold uppercase tracking-widest text-[#B91C1C] border-b border-gray-100 pb-2 flex items-center gap-2">
+                              <Mail size={14}/> Email Address
+                           </h3>
+                           
                            {emailStep === 1 ? (
                               <form onSubmit={handleEmailInitiate} className="space-y-4">
-                                 <div className="flex flex-col gap-1 opacity-50">
-                                    <label className="text-[10px] uppercase tracking-widest text-gray-400">Current Email</label>
-                                    <div className="text-sm font-medium">{user.email}</div>
+                                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+                                    <div>
+                                       <label className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Current Email</label>
+                                       <div className="text-sm font-bold text-gray-900">{user.email}</div>
+                                    </div>
+                                    <CheckCircle size={18} className="text-green-500" />
                                  </div>
                                  
-                                 <input type="email" name="newEmail" placeholder="New Email Address" required className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-black outline-none" />
+                                 <div className="relative">
+                                    <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                    <input type="email" name="newEmail" placeholder="New Email Address" required className="w-full bg-white border border-gray-200 rounded-xl pl-12 pr-4 py-3.5 text-sm focus:border-[#B91C1C] outline-none transition-all" />
+                                 </div>
                                  
-                                 {/* Only show password input if user actually has a password */}
+                                 {/* ✅ FIX: Only require password for Email Change IF user HAS one */}
                                  {userHasPassword && (
-                                     <input type="password" name="password" placeholder="Confirm with Password" required className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-black outline-none" />
+                                    <div className="relative">
+                                       <KeyRound size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                       <input type="password" name="password" placeholder="Confirm with Password" required className="w-full bg-white border border-gray-200 rounded-xl pl-12 pr-4 py-3.5 text-sm focus:border-[#B91C1C] outline-none transition-all" />
+                                    </div>
                                  )}
 
-                                 <button disabled={loading} className="w-full py-3 bg-white border border-gray-200 text-black hover:bg-black hover:text-white transition-colors rounded-lg text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2">
-                                    {loading ? <Loader2 size={14} className="animate-spin"/> : <>Send OTP <ChevronRight size={14}/></>}
+                                 <button disabled={loading} className="w-full py-3.5 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#B91C1C] transition-colors flex items-center justify-center gap-2 shadow-md">
+                                    {loading ? <Loader2 size={14} className="animate-spin"/> : <>Send Verification Code <ChevronRight size={14}/></>}
                                  </button>
                               </form>
                            ) : (
-                              <form onSubmit={handleEmailVerify} className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                                 <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 mb-2">
-                                    Enter the code sent to <b>{pendingEmail}</b>
+                              <form onSubmit={handleEmailVerify} className="space-y-5 animate-in fade-in slide-in-from-right-4">
+                                 <div className="bg-[#B91C1C]/5 p-4 rounded-xl text-xs text-[#B91C1C] border border-[#B91C1C]/10 flex items-start gap-3">
+                                    <Info size={16} className="shrink-0 mt-0.5"/>
+                                    <span>We sent a 6-digit code to <b>{pendingEmail}</b>. Please enter it below to confirm.</span>
                                  </div>
-                                 <input type="text" name="otp" placeholder="XXXXXX" maxLength={6} required className="w-full bg-white border-2 border-black rounded-lg px-4 py-3 text-center text-lg font-bold tracking-[0.5em] focus:outline-none" />
-                                 <div className="flex gap-2">
-                                    <button type="button" onClick={() => setEmailStep(1)} className="flex-1 py-3 bg-gray-100 rounded-lg text-xs font-bold uppercase">Back</button>
-                                    <button disabled={loading} className="flex-[2] py-3 bg-black text-white rounded-lg text-xs font-bold uppercase">
-                                       {loading ? 'Verifying...' : 'Verify & Save'}
+                                 <input type="text" name="otp" placeholder="0 0 0 0 0 0" maxLength={6} required className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-4 text-center text-xl font-bold tracking-[0.5em] focus:border-[#B91C1C] focus:text-[#B91C1C] outline-none transition-all placeholder:text-gray-200" />
+                                 <div className="flex gap-3">
+                                    <button type="button" onClick={() => setEmailStep(1)} className="flex-1 py-3.5 bg-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-500 hover:bg-gray-200 transition-colors">Back</button>
+                                    <button disabled={loading} className="flex-[2] py-3.5 bg-[#B91C1C] text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition-colors shadow-lg">
+                                       {loading ? 'Verifying...' : 'Verify & Update'}
                                     </button>
                                  </div>
                               </form>
                            )}
                         </div>
 
-                     </div>
+                     </motion.div>
                    )}
 
                 </div>

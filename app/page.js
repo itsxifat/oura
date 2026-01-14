@@ -12,7 +12,7 @@ export default async function Home() {
   const siteContent = await SiteContent.findOne({ identifier: 'main_layout' }).lean();
   const navData = {
     logoImage: "/logo.png",
-    logoText: "ANAQA",
+    logoText: "OURA",
     links: siteContent?.navbarLinks ? JSON.parse(JSON.stringify(siteContent.navbarLinks)) : [] 
   };
 

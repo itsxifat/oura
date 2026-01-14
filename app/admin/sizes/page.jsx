@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Loader2, Table as TableIcon, X, Check, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2, Table as TableIcon, X, Check, AlertCircle, Ruler, Settings2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSizesData, updateMasterSizes, upsertSizeGuide, removeSizeGuide } from '@/actions/sizes';
 
@@ -11,7 +11,11 @@ const Toast = ({ message, type, onClose }) => (
     initial={{ opacity: 0, y: 50 }} 
     animate={{ opacity: 1, y: 0 }} 
     exit={{ opacity: 0, y: 20 }}
-    className={`fixed bottom-8 right-8 px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 z-50 ${type === 'success' ? 'bg-[#1a1a1a] text-white border border-[#D4AF37]' : 'bg-red-50 text-red-600 border border-red-200'}`}
+    className={`fixed bottom-8 right-8 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 border ${
+      type === 'success' 
+        ? 'bg-[#800000] text-white border-[#D4AF37]' 
+        : 'bg-red-50 text-red-600 border-red-200'
+    }`}
   >
     {type === 'success' ? <Check size={16} className="text-[#D4AF37]" /> : <AlertCircle size={16} />}
     <span className="text-xs font-bold uppercase tracking-widest">{message}</span>
@@ -159,21 +163,22 @@ export default function AdminSizeManager() {
   };
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-[#faf9f6] text-[#D4AF37]">
+    <div className="h-screen flex flex-col items-center justify-center bg-[#faf9f6] text-[#800000]">
         <Loader2 className="animate-spin mb-4" size={40}/>
         <span className="text-xs uppercase tracking-widest font-bold text-gray-400">Loading Configuration...</span>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] p-6 md:p-12 font-manrope text-[#1a1a1a]">
+    <div className="min-h-screen bg-[#faf9f6] p-4 md:p-8 pt-24 lg:pt-8 font-manrope text-gray-900">
       <div className="max-w-7xl mx-auto">
         
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-end mb-12 border-b border-gray-200 pb-6">
+        <div className="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-gray-200 pb-6">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#D4AF37] block mb-2">Inventory Settings</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#800000] block mb-2">Inventory Settings</span>
             <h1 className="text-4xl font-bodoni text-black">Size Management</h1>
+            <p className="text-gray-400 text-xs mt-2 font-medium tracking-wide">Configure global sizes and measurement charts.</p>
           </div>
           
           {/* TABS */}
@@ -182,9 +187,14 @@ export default function AdminSizeManager() {
                 <button 
                     key={tab}
                     onClick={() => { setActiveTab(tab); setEditingGuide(null); }}
-                    className={`px-8 py-3 text-[10px] font-bold uppercase tracking-widest transition-all rounded-lg ${activeTab === tab ? 'bg-black text-white shadow-lg' : 'text-gray-400 hover:text-black hover:bg-gray-50'}`}
+                    className={`px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all rounded-lg flex items-center gap-2 ${
+                        activeTab === tab 
+                        ? 'bg-[#800000] text-white shadow-lg' 
+                        : 'text-gray-400 hover:text-[#800000] hover:bg-red-50'
+                    }`}
                 >
-                    {tab === 'guides' ? 'Measurement Charts' : 'Master Sizes'}
+                    {tab === 'guides' ? <Ruler size={14}/> : <Settings2 size={14}/>}
+                    {tab === 'guides' ? 'Charts' : 'Global Sizes'}
                 </button>
             ))}
           </div>
@@ -198,26 +208,26 @@ export default function AdminSizeManager() {
                     initial={{ opacity: 0, y: 10 }} 
                     animate={{ opacity: 1, y: 0 }} 
                     exit={{ opacity: 0, y: -10 }}
-                    className="bg-white p-10 border border-gray-100 shadow-xl rounded-2xl max-w-4xl"
+                    className="bg-white p-8 md:p-10 border border-gray-200 shadow-sm rounded-2xl max-w-4xl"
                 >
                     <div className="flex justify-between items-start mb-8">
                         <div>
-                            <h3 className="font-bodoni text-2xl mb-2">Global Size List</h3>
-                            <p className="text-xs text-gray-400">These sizes will be available when adding product inventory.</p>
+                            <h3 className="font-bodoni text-2xl mb-2 text-black">Global Size List</h3>
+                            <p className="text-xs text-gray-400">These sizes will be available in the "Stock" dropdown when adding products.</p>
                         </div>
-                        <span className="bg-[#faf9f6] px-3 py-1 text-[10px] font-bold text-gray-400 rounded border border-gray-200">{masterSizes.length} Active</span>
+                        <span className="bg-[#800000]/5 px-3 py-1 text-[10px] font-bold text-[#800000] rounded border border-[#800000]/20">{masterSizes.length} Active</span>
                     </div>
                     
                     {/* Input Area */}
-                    <div className="flex gap-2 mb-10">
+                    <div className="flex gap-3 mb-10">
                         <input 
                             value={newSizeInput}
                             onChange={(e) => setNewSizeInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAddMasterSize()}
                             placeholder="Type Size (e.g. XL)" 
-                            className="flex-1 bg-gray-50 border border-transparent focus:border-[#D4AF37] focus:bg-white px-6 py-4 text-sm font-bold tracking-wider outline-none uppercase transition-all rounded-lg"
+                            className="flex-1 bg-gray-50 border border-transparent focus:border-[#800000] focus:bg-white px-6 py-4 text-sm font-bold tracking-wider outline-none uppercase transition-all rounded-xl"
                         />
-                        <button onClick={handleAddMasterSize} className="bg-black text-white px-8 rounded-lg uppercase font-bold text-[10px] tracking-widest hover:bg-[#D4AF37] transition-colors shadow-lg">
+                        <button onClick={handleAddMasterSize} className="bg-[#800000] text-white px-8 rounded-xl uppercase font-bold text-[10px] tracking-widest hover:bg-black transition-colors shadow-lg shadow-[#800000]/20">
                             Add Size
                         </button>
                     </div>
@@ -230,11 +240,11 @@ export default function AdminSizeManager() {
                     ) : (
                         <div className="flex flex-wrap gap-3">
                             {masterSizes.map(size => (
-                                <div key={size} className="group relative bg-white border border-gray-200 px-6 py-3 min-w-[80px] text-center hover:border-black hover:shadow-md transition-all cursor-default rounded-lg">
-                                    <span className="font-bold text-sm">{size}</span>
+                                <div key={size} className="group relative bg-white border border-gray-200 px-6 py-3 min-w-[80px] text-center hover:border-[#800000] hover:shadow-md transition-all cursor-default rounded-xl">
+                                    <span className="font-bold text-sm text-gray-800 group-hover:text-[#800000]">{size}</span>
                                     <button 
                                         onClick={() => handleDeleteMasterSize(size)}
-                                        className="absolute -top-2 -right-2 bg-white text-red-500 border border-gray-100 rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110 hover:border-red-200"
+                                        className="absolute -top-2 -right-2 bg-white text-gray-400 hover:text-red-600 border border-gray-100 rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110 hover:border-red-200"
                                     >
                                         <X size={10} strokeWidth={3}/>
                                     </button>
@@ -253,9 +263,9 @@ export default function AdminSizeManager() {
                     <div className="lg:col-span-3 space-y-4">
                         <button 
                             onClick={() => openEditor('new')}
-                            className="w-full py-4 bg-white border border-gray-200 text-black text-[10px] font-bold uppercase tracking-widest hover:border-[#D4AF37] hover:text-[#D4AF37] transition-all rounded-xl shadow-sm flex items-center justify-center gap-2 group"
+                            className="w-full py-4 bg-white border border-gray-200 text-gray-600 text-[10px] font-bold uppercase tracking-widest hover:border-[#800000] hover:text-[#800000] transition-all rounded-xl shadow-sm flex items-center justify-center gap-2 group"
                         >
-                            <Plus size={14} className="group-hover:rotate-90 transition-transform"/> Create New Chart
+                            <Plus size={14} className="group-hover:rotate-90 transition-transform text-[#800000]"/> Create New Chart
                         </button>
                         
                         <div className="space-y-3 h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -263,14 +273,18 @@ export default function AdminSizeManager() {
                                 <div 
                                     key={g._id} 
                                     onClick={() => openEditor(g)}
-                                    className={`p-5 bg-white border cursor-pointer transition-all group relative rounded-xl ${editingGuide === g._id ? 'border-[#D4AF37] shadow-lg ring-1 ring-[#D4AF37]' : 'border-gray-100 hover:border-gray-300'}`}
+                                    className={`p-5 bg-white border cursor-pointer transition-all group relative rounded-xl ${
+                                        editingGuide === g._id 
+                                        ? 'border-[#800000] shadow-md ring-1 ring-[#800000]/10' 
+                                        : 'border-gray-100 hover:border-gray-300'
+                                    }`}
                                 >
-                                    <h4 className="font-bold text-sm mb-1 line-clamp-1">{g.name}</h4>
+                                    <h4 className={`font-bold text-sm mb-1 line-clamp-1 ${editingGuide === g._id ? 'text-[#800000]' : 'text-gray-800'}`}>{g.name}</h4>
                                     <div className="flex justify-between items-center mt-3">
-                                        <span className="text-[9px] text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded border border-gray-100">{g.columns.length} Cols • {g.rows.length} Rows</span>
+                                        <span className="text-[9px] text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded border border-gray-100 group-hover:bg-white">{g.columns.length} Cols • {g.rows.length} Rows</span>
                                         <button 
                                             onClick={(e) => handleDeleteGuide(g._id, e)}
-                                            className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all bg-white rounded-full p-1 shadow-sm"
+                                            className="text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all bg-white rounded-full p-1.5 shadow-sm border border-transparent hover:border-red-100"
                                         >
                                             <Trash2 size={12}/>
                                         </button>
@@ -278,7 +292,7 @@ export default function AdminSizeManager() {
                                 </div>
                             ))}
                             {guides.length === 0 && (
-                                <div className="text-center py-8 text-gray-300 text-xs uppercase tracking-widest">No charts found</div>
+                                <div className="text-center py-8 text-gray-300 text-xs uppercase tracking-widest border-2 border-dashed border-gray-100 rounded-xl">No charts found</div>
                             )}
                         </div>
                     </div>
@@ -290,24 +304,24 @@ export default function AdminSizeManager() {
                                 key="editor" 
                                 initial={{ opacity: 0, x: 20 }} 
                                 animate={{ opacity: 1, x: 0 }}
-                                className="bg-white border border-gray-200 shadow-2xl p-8 rounded-2xl relative h-full flex flex-col"
+                                className="bg-white border border-gray-200 shadow-sm p-8 rounded-2xl relative h-full flex flex-col"
                             >
                                 <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-6 border-b border-gray-50 pb-6">
                                     <div className="w-full md:w-1/2">
-                                        <label className="text-[9px] font-bold uppercase tracking-widest text-[#D4AF37] mb-2 block">Chart Name</label>
+                                        <label className="text-[9px] font-bold uppercase tracking-widest text-[#800000] mb-2 block">Chart Name</label>
                                         <input 
                                             value={editorData.name}
                                             onChange={(e) => setEditorData({...editorData, name: e.target.value})}
-                                            className="text-3xl font-bodoni w-full border-b border-gray-200 pb-2 focus:border-black outline-none placeholder:text-gray-200 bg-transparent transition-colors"
+                                            className="text-3xl font-bodoni w-full border-b border-gray-200 pb-2 focus:border-[#800000] outline-none placeholder:text-gray-200 bg-transparent transition-colors text-black"
                                             placeholder="e.g. Panjabi Regular Fit"
                                         />
                                     </div>
                                     <div className="flex gap-3 self-end">
-                                        <button onClick={() => setEditingGuide(null)} className="px-6 py-3 border border-gray-200 text-[10px] font-bold uppercase tracking-widest hover:border-black transition-all rounded-lg">Cancel</button>
+                                        <button onClick={() => setEditingGuide(null)} className="px-6 py-3 border border-gray-200 text-[10px] font-bold uppercase tracking-widest hover:border-black text-gray-500 hover:text-black transition-all rounded-lg">Cancel</button>
                                         <button 
                                             onClick={handleSaveGuide} 
                                             disabled={saving} 
-                                            className="px-8 py-3 bg-black text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#D4AF37] transition-all disabled:opacity-50 flex items-center gap-2 rounded-lg shadow-xl"
+                                            className="px-8 py-3 bg-[#800000] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50 flex items-center gap-2 rounded-lg shadow-xl shadow-[#800000]/20"
                                         >
                                             {saving ? <Loader2 className="animate-spin" size={14}/> : <Save size={14}/>} 
                                             Save Changes
@@ -316,24 +330,24 @@ export default function AdminSizeManager() {
                                 </div>
 
                                 {/* Matrix Editor */}
-                                <div className="flex-1 overflow-x-auto border border-gray-100 rounded-xl custom-scrollbar shadow-inner bg-gray-50/30">
+                                <div className="flex-1 overflow-x-auto border border-gray-100 rounded-xl custom-scrollbar shadow-inner bg-gray-50/50">
                                     <table className="w-full text-sm border-collapse">
                                         <thead>
-                                            <tr className="bg-[#111] text-white">
+                                            <tr className="bg-[#800000] text-white">
                                                 {editorData.columns.map((col, i) => (
                                                     <th key={i} className="p-3 border-r border-white/10 min-w-[140px] relative group first:rounded-tl-lg last:rounded-tr-lg">
                                                         <div className="flex items-center gap-2 justify-center">
                                                             <input 
                                                                 value={col} 
                                                                 onChange={(e) => updateColumnName(i, e.target.value)}
-                                                                className="bg-transparent font-bold uppercase text-[10px] tracking-widest w-full outline-none text-center placeholder:text-white/30 focus:text-[#D4AF37]"
+                                                                className="bg-transparent font-bold uppercase text-[10px] tracking-widest w-full outline-none text-center placeholder:text-white/30 focus:text-[#D4AF37] selection:bg-[#D4AF37]/30"
                                                                 placeholder="LABEL"
                                                             />
-                                                            <button onClick={() => removeColumn(i)} className="text-white/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2"><X size={10}/></button>
+                                                            <button onClick={() => removeColumn(i)} className="text-white/20 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2"><X size={10}/></button>
                                                         </div>
                                                     </th>
                                                 ))}
-                                                <th className="w-12 text-center p-2 cursor-pointer hover:bg-[#D4AF37] transition-colors" onClick={addColumn} title="Add Column">
+                                                <th className="w-12 text-center p-2 cursor-pointer hover:bg-black transition-colors" onClick={addColumn} title="Add Column">
                                                     <Plus size={16} className="mx-auto text-white"/>
                                                 </th>
                                             </tr>
@@ -346,7 +360,7 @@ export default function AdminSizeManager() {
                                                             <input 
                                                                 value={val}
                                                                 onChange={(e) => updateCellValue(rIdx, cIdx, e.target.value)}
-                                                                className={`w-full h-full py-4 text-center outline-none focus:bg-[#fffdf5] focus:text-[#D4AF37] transition-colors font-medium bg-transparent ${cIdx === 0 ? 'font-bold text-black' : 'text-gray-600'}`}
+                                                                className={`w-full h-full py-4 text-center outline-none focus:bg-[#fffdf5] focus:text-[#800000] transition-colors font-medium bg-transparent ${cIdx === 0 ? 'font-bold text-black' : 'text-gray-600'}`}
                                                             />
                                                         </td>
                                                     ))}
@@ -360,7 +374,7 @@ export default function AdminSizeManager() {
                                         </tbody>
                                     </table>
                                 </div>
-                                <button onClick={addRow} className="mt-4 w-full py-4 border-2 border-dashed border-gray-200 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:border-[#D4AF37] hover:text-[#D4AF37] transition-all rounded-xl bg-white">
+                                <button onClick={addRow} className="mt-4 w-full py-4 border-2 border-dashed border-gray-200 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:border-[#800000] hover:text-[#800000] hover:bg-[#800000]/5 transition-all rounded-xl bg-white">
                                     + Add Measurement Row
                                 </button>
 
@@ -368,7 +382,7 @@ export default function AdminSizeManager() {
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl bg-white text-gray-300 p-20 shadow-sm">
                                 <TableIcon size={64} strokeWidth={1} className="mb-4 text-gray-200 opacity-50"/>
-                                <span className="text-xs font-bold uppercase tracking-widest">Select a chart to edit</span>
+                                <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Select a chart from the left to edit</span>
                             </div>
                         )}
                     </div>

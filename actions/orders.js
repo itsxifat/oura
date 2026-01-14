@@ -1,28 +1,37 @@
 'use server'
 
+import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import Order from '@/models/Order';
 import Product from '@/models/Product';
+import Category from '@/models/Category'; 
 import Coupon from '@/models/Coupon';
 import Address from '@/models/Address';
 import User from '@/models/User';
+import Tag from '@/models/Tag'; 
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/auth'; 
 import { revalidatePath } from 'next/cache';
 
 const serialize = (obj) => JSON.parse(JSON.stringify(obj));
 
-// ... (Address, Coupon, User functions - KEEP THEM AS IS) ...
+// =========================================
+//  ADDRESS ACTIONS
+// =========================================
 export async function getSavedAddresses() {
   await connectDB();
   const session = await getServerSession(authOptions);
+  
   if (!session || !session.user) return [];
+  
   let userId = session.user.id;
   if (!userId && session.user.email) {
     const user = await User.findOne({ email: session.user.email });
     if (user) userId = user._id;
   }
+  
   if (!userId) return [];
+  
   const addresses = await Address.find({ user: userId }).sort({ createdAt: -1 }).lean();
   return serialize(addresses);
 }
@@ -30,12 +39,15 @@ export async function getSavedAddresses() {
 export async function saveAddress(formData) {
   await connectDB();
   const session = await getServerSession(authOptions);
-  if (!session || !session.user) return { error: "Unauthorized" };
+  
+  if (!session || !session.user) return { error: "Unauthorized: Please log in." };
+  
   let userId = session.user.id;
   if (!userId && session.user.email) {
     const user = await User.findOne({ email: session.user.email });
     if (user) userId = user._id;
   }
+
   try {
     const addressData = {
       user: userId,
@@ -50,15 +62,21 @@ export async function saveAddress(formData) {
     await Address.create(addressData);
     revalidatePath('/checkout');
     return { success: true };
-  } catch (error) { return { error: "Failed to save address" }; }
+  } catch (error) { 
+    return { error: "Failed to save address" }; 
+  }
 }
 
+// =========================================
+//  COUPON ACTIONS
+// =========================================
 export async function createCoupon(formData) {
   await connectDB();
   try {
     const isAutomatic = formData.get('isAutomatic') === 'true';
     let code = formData.get('code');
     if (isAutomatic && !code) code = `AUTO-${Date.now()}`;
+    
     await Coupon.create({
       code,
       description: formData.get('description'),
@@ -72,6 +90,7 @@ export async function createCoupon(formData) {
       applicableCategories: formData.getAll('categories'), 
       applicableProducts: formData.getAll('products'), 
     });
+    
     revalidatePath('/admin/coupons');
     return { success: true };
   } catch (error) { return { error: 'Failed to create coupon' }; }
@@ -90,7 +109,160 @@ export async function deleteCoupon(id) {
   return { success: true };
 }
 
-// --- CART CALCULATION LOGIC ---
+// =========================================
+//  REVIEW ACTIONS (Correct Logic Here)
+// =========================================
+
+// Helper: Resolve Real Product ID (Handles Order Item ID mismatch)
+async function findProductRobust(productId, orderId) {
+  let product = await Product.findById(productId);
+  if (product) return product;
+
+  if (orderId) {
+    const order = await Order.findById(orderId);
+    if (order) {
+      const targetItem = order.items.find(i => i._id && i._id.toString() === productId);
+      if (targetItem) {
+         const realProductId = targetItem.product || targetItem.productId;
+         if (realProductId) {
+             product = await Product.findById(realProductId);
+         }
+      }
+    }
+  }
+  return product;
+}
+
+export async function getOrderReview({ productId, orderId }) {
+  await connectDB();
+  try {
+    if (!productId || !orderId) return { found: false };
+    const product = await findProductRobust(productId, orderId);
+    if (!product) return { found: false };
+
+    // Find review linked to this specific Order ID
+    const review = product.reviews?.find(r => r.orderId && r.orderId.toString() === orderId.toString());
+    
+    if (review) {
+        return { 
+            found: true, 
+            rating: review.rating, 
+            comment: review.comment, 
+            editCount: review.editCount || 0 
+        };
+    }
+    return { found: false };
+  } catch (error) {
+    return { found: false, error: error.message };
+  }
+}
+
+export async function submitReview({ productId, rating, comment, orderId }) {
+  try {
+    await connectDB();
+    if (!orderId || !productId || !rating) return { success: false, error: 'Missing Data' };
+
+    const order = await Order.findById(orderId);
+    if (!order) return { success: false, error: 'Order not found' };
+
+    const product = await findProductRobust(productId, orderId);
+    if (!product) return { success: false, error: 'Product not found.' };
+
+    const reviewerName = order.guestInfo ? `${order.guestInfo.firstName} ${order.guestInfo.lastName}` : 'Verified Customer';
+
+    // Find existing review by Order ID
+    const existingReviewIndex = product.reviews.findIndex(r => r.orderId && r.orderId.toString() === orderId.toString());
+
+    if (existingReviewIndex >= 0) {
+        // Edit Mode
+        const existingReview = product.reviews[existingReviewIndex];
+        if ((existingReview.editCount || 0) >= 3) {
+            return { success: false, error: "Maximum edit limit (3) reached." };
+        }
+        product.reviews[existingReviewIndex].rating = Number(rating);
+        product.reviews[existingReviewIndex].comment = comment;
+        product.reviews[existingReviewIndex].editCount = (existingReview.editCount || 0) + 1;
+        product.reviews[existingReviewIndex].updatedAt = new Date();
+    } else {
+        // Create Mode
+        const isDup = product.reviews.find(r => r.orderId?.toString() === orderId.toString());
+        if(isDup) return { success: false, error: "Review already exists." };
+
+        product.reviews.push({
+            user: reviewerName,
+            rating: Number(rating),
+            comment,
+            orderId: orderId.toString(),
+            editCount: 0,
+            createdAt: new Date()
+        });
+    }
+
+    product.numReviews = product.reviews.length;
+    product.rating = product.reviews.reduce((a, b) => a + b.rating, 0) / product.reviews.length;
+
+    await product.save();
+    
+    revalidatePath(`/product/${product.slug}`);
+    revalidatePath('/account/orders'); 
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Review Action Error:', error);
+    return { success: false, error: 'Submission Error' };
+  }
+}
+
+// =========================================
+//  ORDER & CART LOGIC
+// =========================================
+
+export async function getUserOrders() {
+  await connectDB();
+  const session = await getServerSession(authOptions);
+  
+  if (!session || !session.user) return [];
+  
+  let userId = session.user.id;
+  if (!userId && session.user.email) {
+    const user = await User.findOne({ email: session.user.email });
+    if (user) userId = user._id;
+  }
+  
+  const orders = await Order.find({ user: userId }).sort({ createdAt: -1 }).lean();
+  if (!orders || orders.length === 0) return [];
+
+  // Fetch products to check for reviews
+  const productIds = orders.flatMap(o => o.items.map(i => (i.product && i.product._id) ? i.product._id : i.product)).filter(id => id);
+  
+  // Get ONLY reviews for efficiency
+  const products = await Product.find({ _id: { $in: productIds } }).select('reviews').lean();
+
+  // Inject review status
+  orders.forEach(order => {
+    order.items.forEach(item => {
+      const productIdStr = (item.product?._id || item.product)?.toString();
+      const product = products.find(p => p._id.toString() === productIdStr);
+
+      if (product && product.reviews) {
+        // Match review by Order ID
+        const existingReview = product.reviews.find(r => r.orderId && r.orderId.toString() === order._id.toString());
+        
+        if (existingReview) {
+          item.hasReviewed = true;
+          item.userRating = existingReview.rating;
+          item.userComment = existingReview.comment;
+        } else {
+          item.hasReviewed = false;
+        }
+      }
+    });
+  });
+
+  return serialize(orders);
+}
+
+// --- CART CALCULATION ---
 function computeRuleDiscount(rule, verifiedItems, cartTotal, totalQty) {
   const now = new Date();
   if (!rule.isActive) return 0;
@@ -131,19 +303,15 @@ function computeRuleDiscount(rule, verifiedItems, cartTotal, totalQty) {
 }
 
 export async function calculateCart(cartItems, manualCode = null) {
-  console.log("--- DEBUG START: calculateCart ---");
-  
   await connectDB();
   const response = { cartTotal: 0, discountTotal: 0, grandTotal: 0, appliedCoupon: null, error: null };
   
-  if (!cartItems || cartItems.length === 0) return response;
+  if (!cartItems || cartItems.length === 0) return serialize(response);
 
   const productIds = cartItems.map(i => i._id || i.product);
-  const dbProductsRaw = await Product.find({ _id: { $in: productIds } }).populate('category').lean();
+  const dbProductsRaw = await Product.find({ _id: { $in: productIds } }).populate('category').populate('tags').lean(); 
   const dbProducts = serialize(dbProductsRaw);
   const now = new Date();
-
-  console.log(`Checking ${dbProducts.length} products from DB...`);
 
   const verifiedItems = [];
   
@@ -151,67 +319,52 @@ export async function calculateCart(cartItems, manualCode = null) {
       const dbProd = dbProducts.find(p => p._id.toString() === (clientItem._id || clientItem.product).toString());
       
       if (dbProd) {
-          // --- DEBUGGING PRICES ---
           const basePrice = Number(dbProd.price);
           const discPrice = Number(dbProd.discountPrice);
           let effectivePrice = basePrice;
           
-          console.log(`Product: ${dbProd.name}`);
-          console.log(` > Base Price (DB): ${basePrice}`);
-          console.log(` > Discount Price (DB): ${discPrice}`);
-
-          // --- STRICT DISCOUNT LOGIC ---
           if (!isNaN(discPrice) && discPrice > 0 && discPrice < basePrice) {
-             const start = dbProd.saleStartDate ? new Date(dbProd.saleStartDate) : null;
-             const end = dbProd.saleEndDate ? new Date(dbProd.saleEndDate) : null;
-             
-             // Timezone safe check: If date is missing, treat as active
-             const isStarted = !start || now >= start;
-             const isNotEnded = !end || now <= end;
-             
-             console.log(` > Sale Active? ${isStarted && isNotEnded} (Start: ${start}, End: ${end}, Now: ${now})`);
-
-             if (isStarted && isNotEnded) {
-                 effectivePrice = discPrice;
-                 console.log(` >>> APPLYING DISCOUNT: New Price is ${effectivePrice}`);
-             } else {
-                 console.log(` >>> DISCOUNT IGNORED: Date range invalid.`);
-             }
-          } else {
-             console.log(` >>> NO VALID DISCOUNT DETECTED.`);
+              const start = dbProd.saleStartDate ? new Date(dbProd.saleStartDate) : null;
+              const end = dbProd.saleEndDate ? new Date(dbProd.saleEndDate) : null;
+              const isStarted = !start || now >= start;
+              const isNotEnded = !end || now <= end;
+              
+              if (isStarted && isNotEnded) {
+                  effectivePrice = discPrice;
+              }
           }
 
-          // --- SIZE LOGIC ---
           let finalSize = clientItem.size || clientItem.selectedSize; 
           if (!finalSize && dbProd.variants && dbProd.variants.length === 1) {
               finalSize = dbProd.variants[0].size;
-              console.log(` > Auto-Assigned Size: ${finalSize}`);
           } else if (!finalSize) {
               finalSize = "STD"; 
-              console.log(` > Defaulted Size to STD`);
+          }
+
+          let displayTag = dbProd.tags?.[0]?.name || null;
+          if (!displayTag) {
+             if (effectivePrice < basePrice) displayTag = "SALE";
+             else if (new Date(dbProd.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) displayTag = "NEW";
           }
 
           verifiedItems.push({
               ...dbProd,
               _id: dbProd._id, 
-              price: effectivePrice, // ✅ THIS MUST BE THE DISCOUNTED PRICE
+              price: effectivePrice, 
               basePrice: basePrice, 
               quantity: clientItem.quantity, 
               selectedSize: finalSize, 
+              tag: displayTag,
               sku: dbProd.sku,
               barcode: dbProd.barcode 
           });
       }
   }
 
-  // Calculate Totals
   response.cartTotal = verifiedItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const totalQty = verifiedItems.reduce((acc, item) => acc + item.quantity, 0);
 
-  console.log(`Total Cart Value (Calculated): ${response.cartTotal}`);
-
-  // Coupons
-  const autoRules = await Coupon.find({ isAutomatic: true, isActive: true });
+  const autoRules = await Coupon.find({ isAutomatic: true, isActive: true }).lean();
   let bestAutoDiscount = 0;
   let bestAutoRule = null;
 
@@ -221,7 +374,7 @@ export async function calculateCart(cartItems, manualCode = null) {
   }
 
   if (manualCode) {
-    const manualRule = await Coupon.findOne({ code: manualCode.toUpperCase(), isActive: true, isAutomatic: false });
+    const manualRule = await Coupon.findOne({ code: manualCode.toUpperCase(), isActive: true, isAutomatic: false }).lean();
     if (manualRule) {
       const manualAmount = computeRuleDiscount(manualRule, verifiedItems, response.cartTotal, totalQty);
       if (manualAmount > 0) {
@@ -237,8 +390,8 @@ export async function calculateCart(cartItems, manualCode = null) {
     } else {
       response.error = 'Invalid Coupon Code';
       if (bestAutoRule) { 
-          response.appliedCoupon = { code: bestAutoRule.code, desc: bestAutoRule.description, amount: bestAutoDiscount, isAuto: true }; 
-          response.discountTotal = bestAutoDiscount; 
+         response.appliedCoupon = { code: bestAutoRule.code, desc: bestAutoRule.description, amount: bestAutoDiscount, isAuto: true }; 
+         response.discountTotal = bestAutoDiscount; 
       }
     }
   } else {
@@ -251,28 +404,29 @@ export async function calculateCart(cartItems, manualCode = null) {
   if (response.discountTotal > response.cartTotal) response.discountTotal = response.cartTotal;
   response.grandTotal = response.cartTotal - response.discountTotal;
   
-  response.verifiedItems = verifiedItems;
-  console.log("--- DEBUG END ---");
-  return response;
+  response.validatedCart = verifiedItems;
+  return serialize(response);
 }
 
-// --- ORDER CREATION ---
 export async function createOrder(orderData) {
   console.log("--- CREATE ORDER STARTED ---");
   await connectDB();
   const session = await getServerSession(authOptions);
   
-  let userId = session?.user?.id;
-  if (!userId && session?.user?.email) {
+  // ✅ FIX: BLOCK GUEST ORDERS
+  if (!session || !session.user) {
+      return { error: "Please log in to place an order." };
+  }
+
+  let userId = session.user.id;
+  if (!userId && session.user.email) {
     const user = await User.findOne({ email: session.user.email });
     if (user) userId = user._id;
   }
   
-  // 1. Recalculate
   const calcResult = await calculateCart(orderData.items, orderData.couponCode);
   
-  // 2. Stock Check
-  for (const item of calcResult.verifiedItems) {
+  for (const item of calcResult.validatedCart) {
       const product = await Product.findById(item._id);
       if (!product) return { error: `Product not found: ${item.name}` };
 
@@ -285,25 +439,21 @@ export async function createOrder(orderData) {
       }
   }
 
-  // 3. Create Order
   const count = await Order.countDocuments();
   
-  // LOG THE ITEMS BEING SAVED TO DB TO VERIFY PRICE
-  console.log("Items to Save:", calcResult.verifiedItems.map(i => ({ name: i.name, price: i.price, size: i.selectedSize })));
-
   const newOrder = new Order({
     ...orderData,
     user: userId, 
-    orderId: `#ANQ-${1000 + count + 1}`,
+    orderId: `#OL-${1000 + count + 1}`,
     status: 'Pending',
     subTotal: calcResult.cartTotal, 
     discountAmount: calcResult.discountTotal || 0,
     couponCode: calcResult.appliedCoupon?.code || null,
     totalAmount: calcResult.grandTotal + (orderData.shippingAddress.method === 'outside' ? 150 : 80),
-    items: calcResult.verifiedItems.map(vi => ({
+    items: calcResult.validatedCart.map(vi => ({
         product: vi._id,
         name: vi.name,
-        price: vi.price, // ✅ VERIFY THIS IS DISCOUNTED IN CONSOLE
+        price: vi.price, 
         basePrice: vi.basePrice,
         quantity: vi.quantity,
         size: vi.selectedSize, 
@@ -315,8 +465,7 @@ export async function createOrder(orderData) {
 
   await newOrder.save();
 
-  // 4. Inventory
-  for (const item of calcResult.verifiedItems) {
+  for (const item of calcResult.validatedCart) {
     if (item.selectedSize && item.selectedSize !== "STD" && item.selectedSize !== "Standard") {
         await Product.updateOne(
             { _id: item._id, "variants.size": item.selectedSize },
@@ -339,19 +488,9 @@ export async function createOrder(orderData) {
   return { success: true, orderId: newOrder.orderId };
 }
 
-// ... (getUserOrders, getAdminOrders, updateOrderStatus - NO CHANGES NEEDED) ...
-export async function getUserOrders() {
-  await connectDB();
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user) return [];
-  let userId = session.user.id;
-  if (!userId && session.user.email) {
-    const user = await User.findOne({ email: session.user.email });
-    if (user) userId = user._id;
-  }
-  const orders = await Order.find({ user: userId }).sort({ createdAt: -1 }).lean();
-  return serialize(orders);
-}
+// =========================================
+// ORDER MANAGEMENT (Admin)
+// =========================================
 
 export async function getAdminOrders() {
   await connectDB();
@@ -366,6 +505,7 @@ export async function updateOrderStatus(orderId, newStatus, cancellationReason =
     if (!order) return { error: "Order not found" };
 
     const oldStatus = order.status;
+    
     if (newStatus === 'Cancelled' && oldStatus !== 'Cancelled') {
        for (const item of order.items) {
           if (item.product) {
@@ -380,9 +520,107 @@ export async function updateOrderStatus(orderId, newStatus, cancellationReason =
           }
        }
     }
+    
     order.status = newStatus;
+    if (cancellationReason) order.cancellationReason = cancellationReason;
     await order.save();
     revalidatePath('/admin/orders');
     return { success: true };
   } catch (error) { return { error: "Failed to update status" }; }
+}
+
+// =========================================
+// CATEGORY DATA (Included for completeness)
+// =========================================
+
+export async function getCategoryPageData(slug, filters = {}) {
+  await connectDB();
+
+  const mainCategory = await Category.findOne({ slug }).lean();
+  if (!mainCategory) return null;
+
+  const subCategories = await Category.find({ parentCategory: mainCategory._id }).lean();
+  
+  const min = filters.minPrice ? Number(filters.minPrice) : 0;
+  const max = filters.maxPrice ? Number(filters.maxPrice) : Infinity;
+  const now = new Date();
+
+  // Helper to build filtering query
+  const buildProductQuery = (catId) => {
+    const query = { category: catId };
+
+    if (filters.search) {
+      query.$or = [
+         { name: { $regex: filters.search, $options: 'i' } }
+      ];
+    }
+
+    if (filters.minPrice || filters.maxPrice) {
+      query.$expr = {
+        $and: [
+           { $gte: [
+              { $cond: {
+                  if: { $and: [
+                     { $gt: ["$discountPrice", 0] },
+                     { $lt: ["$discountPrice", "$price"] },
+                     { $or: [ { $eq: ["$saleStartDate", null] }, { $lte: ["$saleStartDate", now] } ] },
+                     { $or: [ { $eq: ["$saleEndDate", null] }, { $gte: ["$saleEndDate", now] } ] }
+                  ]},
+                  then: "$discountPrice",
+                  else: "$price"
+              }}, 
+              min 
+           ]},
+           { $lte: [
+              { $cond: {
+                  if: { $and: [
+                     { $gt: ["$discountPrice", 0] },
+                     { $lt: ["$discountPrice", "$price"] },
+                     { $or: [ { $eq: ["$saleStartDate", null] }, { $lte: ["$saleStartDate", now] } ] },
+                     { $or: [ { $eq: ["$saleEndDate", null] }, { $gte: ["$saleEndDate", now] } ] }
+                  ]},
+                  then: "$discountPrice",
+                  else: "$price"
+              }}, 
+              max 
+           ]}
+        ]
+      };
+    }
+    return query;
+  };
+
+  const mainProducts = await Product.find(buildProductQuery(mainCategory._id))
+    .sort({ createdAt: -1 })
+    .populate('category')
+    .populate('tags')
+    .lean();
+
+  const sections = await Promise.all(subCategories.map(async (sub) => {
+    const products = await Product.find(buildProductQuery(sub._id))
+      .sort({ createdAt: -1 })
+      .limit(8)
+      .populate('category')
+      .populate('tags')
+      .lean();
+
+    return {
+      _id: sub._id,
+      name: sub.name,
+      slug: sub.slug,
+      products
+    };
+  }));
+
+  return serialize({
+    mainCategory,
+    mainProducts,
+    sections: sections.filter(s => s.products.length > 0)
+  });
+}
+
+export async function getTopCategories() {
+  await connectDB();
+  const categories = await Category.find({ parentCategory: null }).limit(4).lean();
+  return serialize(categories);
 }

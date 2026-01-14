@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
+import fs from 'fs';
+import path from 'path';
 
 export async function POST(req) {
   try {
@@ -13,7 +15,13 @@ export async function POST(req) {
     const dateStr = new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
     const orderRef = order.orderId || order._id.slice(-6).toUpperCase();
 
-    // --- 2. HTML TEMPLATE (PREMIUM DESIGN) ---
+    // --- 2. LOAD LOGO (Convert to Base64) ---
+    // This is crucial for Puppeteer to render local images in production
+    const logoPath = path.join(process.cwd(), 'public', 'logo.png');
+    const logoBuffer = fs.readFileSync(logoPath);
+    const logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+
+    // --- 3. HTML TEMPLATE (PREMIUM MAROON DESIGN) ---
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -21,14 +29,16 @@ export async function POST(req) {
         <meta charset="UTF-8">
         <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,700;1,6..96,400&family=Inter:wght@400;500;600&family=Libre+Barcode+39+Text&display=swap" rel="stylesheet">
         <style>
-          /* --- GLOBAL RESET --- */
+          /* --- GLOBAL RESET & A4 CONFIGURATION --- */
+          @page { margin: 0; size: A4; }
           body { 
             margin: 0; 
             padding: 0; 
             font-family: 'Inter', sans-serif; 
-            background-color: #fffdf9; /* Warm off-white paper */
+            background-color: #ffffff; 
             color: #1a1a1a; 
             -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact;
           }
           
           /* A4 Container */
@@ -37,15 +47,22 @@ export async function POST(req) {
             min-height: 297mm;
             padding: 15mm 15mm 10mm 15mm;
             position: relative;
-            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23d4af37' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
+            box-sizing: border-box;
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23800000' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
           }
 
-          /* --- TYPOGRAPHY --- */
+          /* --- TYPOGRAPHY & COLORS (Maroon) --- */
           .font-serif { font-family: 'Bodoni Moda', serif; }
           .font-sans { font-family: 'Inter', sans-serif; }
           .font-mono { font-family: 'Inter', monospace; letter-spacing: -0.5px; }
-          .text-gold { color: #C5A028; }
+          
+          .text-maroon { color: #800000; }
+          .bg-maroon { background-color: #800000; }
+          .border-maroon { border-color: #800000; }
+          
           .text-muted { color: #6B7280; }
+          .text-black { color: #1a1a1a; }
+          
           .text-sm { font-size: 11px; }
           .text-xs { font-size: 9px; }
           .bold { font-weight: 700; }
@@ -53,42 +70,32 @@ export async function POST(req) {
           .tracking-wide { letter-spacing: 0.1em; }
           .tracking-widest { letter-spacing: 0.25em; }
 
-          /* --- LAYOUT UTILS --- */
-          .flex { display: flex; }
-          .justify-between { justify-content: space-between; }
-          .items-center { align-items: center; }
-          .items-end { align-items: flex-end; }
-          .mb-2 { margin-bottom: 0.5rem; }
-          .mb-4 { margin-bottom: 1rem; }
-          .mb-8 { margin-bottom: 2rem; }
-          .border-b { border-bottom: 1px solid #E5E7EB; }
-          .border-dashed { border-style: dashed; }
-
           /* --- HEADER SECTION --- */
-          .header { text-align: center; margin-bottom: 40px; }
-          .brand-name { font-size: 48px; margin: 0; line-height: 1; letter-spacing: -0.02em; }
+          .header { text-align: center; margin-bottom: 40px; position: relative; }
+          
+          .logo-container { margin-bottom: 15px; }
+          .logo-img { height: 40px; width: auto; display: block; margin: 0 auto; }
+          
           .brand-subtitle { 
             display: flex; 
             align-items: center; 
             justify-content: center; 
             gap: 15px; 
-            margin-top: 15px; 
-            font-size: 10px;
+            margin-bottom: 30px;
           }
-          .line { height: 1px; width: 40px; background-color: #C5A028; }
+          .line { height: 1px; width: 40px; background-color: #800000; display: inline-block; vertical-align: middle; }
 
           /* --- INFO BOX --- */
           .info-box {
             border: 1.5px solid #1a1a1a;
             padding: 15px 30px;
             margin: 0 auto;
-            max-width: 80%;
+            width: 80%;
             position: relative;
             display: flex;
             justify-content: space-between;
           }
-          /* Decorative Corners */
-          .corner { position: absolute; width: 8px; height: 8px; border: 1.5px solid #C5A028; transition: all 0.3s; }
+          .corner { position: absolute; width: 8px; height: 8px; border: 1.5px solid #800000; }
           .c-tl { top: -4px; left: -4px; border-bottom: none; border-right: none; }
           .c-tr { top: -4px; right: -4px; border-bottom: none; border-left: none; }
           .c-bl { bottom: -4px; left: -4px; border-top: none; border-right: none; }
@@ -103,7 +110,8 @@ export async function POST(req) {
             border-top: 1px dashed #e5e5e5;
             border-bottom: 1px dashed #e5e5e5;
           }
-          .address-col { width: 45%; }
+          .address-col { width: 48%; }
+          
           .section-label { 
             font-size: 9px; 
             font-weight: 700; 
@@ -113,10 +121,10 @@ export async function POST(req) {
             align-items: center;
             gap: 6px;
           }
-          .diamond { width: 6px; height: 6px; transform: rotate(45deg); background: #1a1a1a; }
-          .diamond.gold { background: #C5A028; }
+          .diamond { width: 6px; height: 6px; transform: rotate(45deg); background: #1a1a1a; display: inline-block; }
+          .diamond.maroon { background: #800000; }
           
-          .client-name { font-size: 20px; margin-bottom: 8px; }
+          .client-name { font-size: 20px; margin-bottom: 8px; color: #1a1a1a; }
           .address-text { 
             font-size: 10px; 
             line-height: 1.6; 
@@ -129,7 +137,7 @@ export async function POST(req) {
             padding-left: 0;
             padding-right: 12px;
             border-left: none;
-            border-right: 2px solid #C5A028;
+            border-right: 2px solid #800000;
           }
 
           /* --- TABLE --- */
@@ -143,12 +151,13 @@ export async function POST(req) {
             border-bottom: 2px solid #1a1a1a; 
             color: #1a1a1a;
           }
-          td { padding: 18px 0; border-bottom: 1px dashed #e5e5e5; vertical-align: top; font-size: 11px; }
+          td { padding: 15px 0; border-bottom: 1px dashed #e5e5e5; vertical-align: top; font-size: 11px; }
+          .text-right { text-align: right; }
+          .text-center { text-align: center; }
+          
           .item-name { font-weight: 600; font-size: 12px; display: block; margin-bottom: 4px; text-transform: uppercase; }
           .sku-pill { 
-            display: inline-flex; 
-            align-items: center; 
-            gap: 6px;
+            display: inline-block; 
             background: #f3f4f6; 
             padding: 2px 6px; 
             border-radius: 4px; 
@@ -156,18 +165,18 @@ export async function POST(req) {
             color: #666;
             margin-right: 8px;
           }
-          .barcode-font { font-family: 'Libre Barcode 39 Text'; font-size: 24px; line-height: 1; margin-left: 5px; }
+          .barcode-font { font-family: 'Libre Barcode 39 Text'; font-size: 24px; line-height: 1; margin-left: 5px; vertical-align: middle; }
 
-          /* --- SUMMARY SECTION --- */
+          /* --- SUMMARY --- */
           .summary-wrapper { display: flex; justify-content: flex-end; margin-bottom: 60px; }
           .summary-card { 
-            width: 320px; 
+            width: 300px; 
             background: #FAFAFA; 
             border: 1px solid #E5E7EB; 
             padding: 20px; 
             position: relative;
           }
-          .gold-accent { position: absolute; right: 0; top: 0; bottom: 0; width: 4px; background: #C5A028; }
+          .maroon-accent { position: absolute; right: 0; top: 0; bottom: 0; width: 4px; background: #800000; }
           
           .sum-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 10px; color: #4B5563; }
           .sum-row.total { 
@@ -178,10 +187,9 @@ export async function POST(req) {
             align-items: flex-end;
           }
           .total-label { font-weight: 700; letter-spacing: 0.1em; font-size: 11px; }
-          .total-amount { font-family: 'Bodoni Moda', serif; font-size: 28px; font-weight: 700; line-height: 1; }
+          .total-amount { font-family: 'Bodoni Moda', serif; font-size: 24px; font-weight: 700; line-height: 1; }
 
           /* --- FOOTER --- */
-          .footer { margin-top: auto; }
           .footer-main { 
             display: flex; 
             justify-content: space-between; 
@@ -220,34 +228,35 @@ export async function POST(req) {
         <div class="page-container">
           
           <div class="header">
-            <h1 class="font-serif">ANAQA</h1>
+            <div class="logo-container">
+               <img src="${logoBase64}" class="logo-img" alt="OURA" />
+            </div>
+            
             <div class="brand-subtitle">
               <div class="line"></div>
-              <span class="text-gold bold tracking-widest uppercase">Official Receipt</span>
+              <span class="text-maroon bold tracking-widest uppercase text-xs" style="margin: 0 10px;">Official Receipt</span>
               <div class="line"></div>
             </div>
-          </div>
 
-          <div class="info-box">
-            <div class="corner c-tl"></div><div class="corner c-tr"></div>
-            <div class="corner c-bl"></div><div class="corner c-br"></div>
-            
-            <div>
-              <span class="text-xs text-muted tracking-widest bold uppercase mb-2" style="display:block;">Order Reference</span>
-              <span class="font-mono text-xl bold">#${orderRef}</span>
-            </div>
-            <div class="text-right">
-              <span class="text-xs text-muted tracking-widest bold uppercase mb-2" style="display:block;">Issued Date</span>
-              <span class="font-mono text-xl bold">${dateStr}</span>
+            <div class="info-box">
+              <div class="corner c-tl"></div><div class="corner c-tr"></div>
+              <div class="corner c-bl"></div><div class="corner c-br"></div>
+              
+              <div style="text-align: left;">
+                <span class="text-xs text-muted tracking-widest bold uppercase mb-2" style="display:block;">Order Reference</span>
+                <span class="font-mono text-black bold" style="font-size: 18px;">#${orderRef}</span>
+              </div>
+              <div style="text-align: right;">
+                <span class="text-xs text-muted tracking-widest bold uppercase mb-2" style="display:block;">Issued Date</span>
+                <span class="font-mono text-black bold" style="font-size: 18px;">${dateStr}</span>
+              </div>
             </div>
           </div>
-
-          <br><br>
 
           <div class="address-grid">
             <div class="address-col">
               <div class="section-label tracking-widest">
-                <div class="diamond"></div> BILLED TO
+                <div class="diamond"></div> &nbsp; BILLED TO
               </div>
               <div class="client-name font-serif">${order.guestInfo?.firstName} ${order.guestInfo?.lastName}</div>
               <div class="address-text font-sans">
@@ -257,15 +266,15 @@ export async function POST(req) {
               </div>
             </div>
             
-            <div class="address-col text-right">
+            <div class="address-col" style="text-align: right;">
               <div class="section-label tracking-widest" style="justify-content: flex-end;">
-                FROM <div class="diamond gold"></div>
+                FROM &nbsp; <div class="diamond maroon"></div>
               </div>
-              <div class="client-name font-serif">ANAQA Sanctuary</div>
+              <div class="client-name font-serif">OURA Sanctuary</div>
               <div class="address-text right font-sans">
                 128, Gulshan Avenue<br>
                 Dhaka, Bangladesh<br>
-                concierge@anaqa.com
+                concierge@oura.com
               </div>
             </div>
           </div>
@@ -299,7 +308,7 @@ export async function POST(req) {
 
           <div class="summary-wrapper">
             <div class="summary-card">
-              <div class="gold-accent"></div>
+              <div class="maroon-accent"></div>
               
               <div class="sum-row">
                 <span class="uppercase tracking-wide">Subtotal</span>
@@ -325,7 +334,7 @@ export async function POST(req) {
             </div>
           </div>
 
-          <div class="footer">
+          <div style="margin-top: auto;">
             <div class="footer-main">
               <div>
                 <div class="stamp ${order.status === 'Delivered' ? 'paid' : ''}">
@@ -339,8 +348,7 @@ export async function POST(req) {
             </div>
             
             <div class="copyright">
-              <span>Terms: Non-refundable. Exchange within 7 days.</span>
-              <span>© ${new Date().getFullYear()} ANAQA. All Rights Reserved.</span>
+              <span>© ${new Date().getFullYear()} OURA. All Rights Reserved.</span>
             </div>
           </div>
 
@@ -349,30 +357,29 @@ export async function POST(req) {
       </html>
     `;
 
-    // --- 3. PUPPETEER GENERATION ---
+    // --- 4. PUPPETEER GENERATION ---
     const browser = await puppeteer.launch({
       headless: 'new',
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     const page = await browser.newPage();
     
-    // Set content
+    await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
+    
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
     
-    // Generate PDF
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 } // Full bleed
+      margin: { top: 0, right: 0, bottom: 0, left: 0 } 
     });
 
     await browser.close();
 
-    // Return the PDF
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="ANAQA_Invoice_${orderRef}.pdf"`,
+        'Content-Disposition': `attachment; filename="OURA_Invoice_${orderRef}.pdf"`,
       },
     });
 

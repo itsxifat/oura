@@ -2,35 +2,16 @@
 
 import { useState } from 'react';
 import { X, Download, Loader2 } from 'lucide-react';
-
-/* ---------------- ASSETS ---------------- */
-export const AnaqaLogo = ({ className = "h-12 w-auto", fill = "currentColor" }) => (
-  <svg viewBox="0 0 240 60" xmlns="http://www.w3.org/2000/svg" className={className}>
-    <text
-      x="50%"
-      y="48"
-      fontFamily="'Bodoni Moda', serif"
-      fontSize="52"
-      fontWeight="700"
-      fill={fill}
-      letterSpacing="0.02em"
-      textAnchor="middle"
-    >
-      ANAQA
-    </text>
-  </svg>
-);
+import Image from 'next/image'; // Import Image component
 
 const Taka = () => <span style={{ fontFamily: 'sans-serif', fontWeight: 'bold' }}>৳</span>;
 
 export default function InvoiceModal({ order, onClose }) {
   const [isDownloading, setIsDownloading] = useState(false);
 
-  /* ---------------- SERVER-SIDE DOWNLOAD HANDLER ---------------- */
   const handleDownloadPDF = async () => {
     setIsDownloading(true);
     try {
-      // Call the API route we created
       const response = await fetch('/api/invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,12 +20,11 @@ export default function InvoiceModal({ order, onClose }) {
 
       if (!response.ok) throw new Error('Server PDF Generation Failed');
 
-      // Create Blob from PDF stream
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ANAQA_Invoice_${order.orderId || 'REF'}.pdf`;
+      a.download = `OURA_Invoice_${order.orderId || 'REF'}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -66,15 +46,15 @@ export default function InvoiceModal({ order, onClose }) {
   const discount = total - order.totalAmount;
   const dateStr = new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
 
-  // --- SHARED STYLES (MATCHING SERVER API) ---
+  // --- NEW MAROON STYLES (MATCHING PDF API) ---
   const s = {
-    container: { backgroundColor: '#fffdf9', color: '#1a1a1a' },
-    goldText: { color: '#C5A028' },
-    goldBorder: { borderColor: '#C5A028' },
+    container: { backgroundColor: '#ffffff', color: '#1a1a1a' },
+    maroonText: { color: '#800000' },
+    maroonBorder: { borderColor: '#800000' },
     grayText: { color: '#6B7280' },
     lightBorder: { borderColor: '#E5E7EB' },
     blackBorder: { borderColor: '#1a1a1a' },
-    bgGold: { backgroundColor: '#C5A028' }
+    bgMaroon: { backgroundColor: '#800000' }
   };
 
   return (
@@ -93,7 +73,7 @@ export default function InvoiceModal({ order, onClose }) {
           <button 
             onClick={handleDownloadPDF} 
             disabled={isDownloading}
-            className="flex items-center gap-2 bg-[#D4AF37] text-black px-6 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-white transition-all shadow-lg disabled:opacity-50"
+            className="flex items-center gap-2 bg-[#800000] text-white px-6 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all shadow-lg disabled:opacity-50"
           >
              {isDownloading ? <Loader2 className="animate-spin" size={14}/> : <Download size={14} />}
              <span>{isDownloading ? 'GENERATING PDF...' : 'DOWNLOAD RECEIPT'}</span>
@@ -112,27 +92,30 @@ export default function InvoiceModal({ order, onClose }) {
           style={{ 
             ...s.container, 
             padding: '15mm 15mm 10mm 15mm',
-            // Subtle Pattern
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23d4af37' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E")`
+            // Subtle Pattern using maroon
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23800000' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E")`
           }}
         >
           
           {/* HEADER */}
-          <div className="text-center mb-12">
-            <h1 className="font-serif text-[48px] font-bold m-0 leading-none tracking-tight text-black mb-4">ANAQA</h1>
+          <div className="text-center mb-12 relative">
+            {/* Image Logo */}
+            <div className="relative w-32 h-12 mx-auto mb-6">
+              <Image src="/logo.png" alt="OURA" fill className="object-contain" priority />
+            </div>
             
             <div className="flex justify-center items-center gap-4 mb-8">
-               <div className="h-[1px] w-12" style={s.bgGold}></div>
-               <span className="text-[10px] uppercase tracking-[0.2em] font-bold" style={s.goldText}>Official Receipt</span>
-               <div className="h-[1px] w-12" style={s.bgGold}></div>
+               <div className="h-[1px] w-12" style={s.bgMaroon}></div>
+               <span className="text-[10px] uppercase tracking-[0.2em] font-bold" style={s.maroonText}>Official Receipt</span>
+               <div className="h-[1px] w-12" style={s.bgMaroon}></div>
             </div>
 
             <div className="inline-block border-[1.5px] px-8 py-4 relative mx-auto w-[80%]" style={s.blackBorder}>
-               {/* Corners */}
-               <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2" style={s.goldBorder}></div>
-               <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2" style={s.goldBorder}></div>
-               <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2" style={s.goldBorder}></div>
-               <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2" style={s.goldBorder}></div>
+               {/* Maroon Corners */}
+               <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2" style={s.maroonBorder}></div>
+               <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2" style={s.maroonBorder}></div>
+               <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2" style={s.maroonBorder}></div>
+               <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2" style={s.maroonBorder}></div>
 
                <div className="flex justify-between items-center">
                   <div className="text-left">
@@ -165,13 +148,13 @@ export default function InvoiceModal({ order, onClose }) {
              <div className="w-[45%] text-right">
                 <div className="flex items-center gap-2 mb-3 justify-end">
                    <h3 className="text-[9px] font-bold uppercase tracking-[0.2em]" style={s.grayText}>From</h3>
-                   <div className="w-1.5 h-1.5 rotate-45" style={s.bgGold}></div>
+                   <div className="w-1.5 h-1.5 rotate-45" style={s.bgMaroon}></div>
                 </div>
-                <p className="font-serif text-xl mb-3 text-black">ANAQA Sanctuary</p>
-                <div className="text-[10px] leading-relaxed uppercase tracking-wide pr-3 border-r-2" style={{ ...s.grayText, ...s.goldBorder }}>
+                <p className="font-serif text-xl mb-3 text-black">OURA Sanctuary</p>
+                <div className="text-[10px] leading-relaxed uppercase tracking-wide pr-3 border-r-2" style={{ ...s.grayText, ...s.maroonBorder }}>
                    <p>128, Gulshan Avenue</p>
                    <p>Dhaka, Bangladesh</p>
-                   <p className="mt-1 font-mono text-black lowercase">concierge@anaqa.com</p>
+                   <p className="mt-1 font-mono text-black lowercase">concierge@oura.com</p>
                 </div>
              </div>
           </div>
@@ -209,7 +192,7 @@ export default function InvoiceModal({ order, onClose }) {
           {/* TOTALS */}
           <div className="flex justify-end mb-16">
              <div className="w-[320px] bg-[#fafafa] p-5 border relative" style={s.lightBorder}>
-                <div className="absolute top-0 right-0 w-1 h-full" style={s.bgGold}></div>
+                <div className="absolute top-0 right-0 w-1 h-full" style={s.bgMaroon}></div>
                 
                 <div className="space-y-2 mb-4">
                    <div className="flex justify-between text-[10px] uppercase tracking-wide" style={s.grayText}>
@@ -241,7 +224,7 @@ export default function InvoiceModal({ order, onClose }) {
           <div className="mt-auto">
              <div className="flex items-end justify-between pb-4 border-b" style={s.blackBorder}>
                 <div style={{ transform: 'rotate(-2deg)' }} className={`border-2 px-5 py-2 font-bold tracking-widest text-[11px] uppercase inline-block ${order.status === 'Delivered' ? 'border-green-700 text-green-700' : 'border-black text-black'}`}>
-                    {order.status === 'Delivered' ? 'PAID' : 'PAYMENT DUE (COD)'}
+                   {order.status === 'Delivered' ? 'PAID' : 'PAYMENT DUE (COD)'}
                 </div>
 
                 <div className="text-right">
@@ -251,8 +234,7 @@ export default function InvoiceModal({ order, onClose }) {
              </div>
 
              <div className="pt-3 flex justify-between items-center text-[8px] uppercase tracking-widest" style={s.grayText}>
-                <p>Terms: Non-refundable. Exchange within 7 days.</p>
-                <p>© {new Date().getFullYear()} ANAQA. All Rights Reserved.</p>
+                <p>© {new Date().getFullYear()} OURA. All Rights Reserved.</p>
              </div>
           </div>
 

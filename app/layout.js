@@ -6,7 +6,7 @@ import FooterWrapper from '@/components/FooterWrapper';
 import { Toaster } from 'react-hot-toast'; // ✅ Import the Toaster
 
 export const metadata = {
-  title: 'ANAQA',
+  title: 'OURA',
   description: 'Premium Fashion Store',
 };
 

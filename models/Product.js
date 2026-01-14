@@ -11,17 +11,15 @@ const ProductSchema = new mongoose.Schema({
   saleStartDate: { type: Date },     
   saleEndDate: { type: Date },       
   
-  // --- FIX: ADDED ROOT INVENTORY FIELDS ---
-  // We need these because your UI has global SKU/Barcode/Stock inputs
+  // Root Inventory
   stock: { type: Number, default: 0 }, 
   sku: { type: String, unique: true, sparse: true },
   barcode: { type: String, unique: true, sparse: true },
 
-  // Variant Inventory
+  // Variants
   variants: [{
     size: { type: String, required: true },
     stock: { type: Number, default: 0 },
-    // You can keep variant-specific SKU if needed later, but UI uses global for now
     sku: { type: String } 
   }],
 
@@ -36,11 +34,17 @@ const ProductSchema = new mongoose.Schema({
   views: { type: Number, default: 0 },
   rating: { type: Number, default: 0 },
   numReviews: { type: Number, default: 0 },
+  
+  // --- ✅ FIX: ADD MISSING FIELDS HERE ---
   reviews: [{
     user: String,
     rating: Number,
     comment: String,
-    createdAt: { type: Date, default: Date.now }
+    // Add these so Mongoose saves them:
+    orderId: { type: String }, // Links review to specific order
+    editCount: { type: Number, default: 0 }, // Tracks edits (Max 3)
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date }
   }]
 }, { timestamps: true });
 

@@ -5,6 +5,7 @@ import User from "@/models/User";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer"; 
+import path from "path";
 
 // --- REQUEST RESET LINK ---
 export async function requestPasswordReset(formData) {
@@ -13,7 +14,7 @@ export async function requestPasswordReset(formData) {
 
   const user = await User.findOne({ email });
   
-  // Security: Return success even if user not found
+  // Security: Return success even if user not found to prevent enumeration
   if (!user) {
     return { success: true, message: "If an account exists, a link has been sent." };
   }
@@ -40,10 +41,18 @@ export async function requestPasswordReset(formData) {
       },
     });
 
+    const logoPath = path.join(process.cwd(), 'public', 'logo.png');
+
     const mailOptions = {
-      from: `"ANAQA Concierge" <${process.env.GMAIL_USER}>`,
+      from: `"OURA Security" <${process.env.GMAIL_USER}>`,
       to: email,
-      subject: "Secure Access Request | ANAQA",
+      subject: "Reset Your Password | OURA",
+      // Attach Logo for embedded display
+      attachments: [{
+        filename: 'logo.png',
+        path: logoPath,
+        cid: 'oura-logo' 
+      }],
       html: `
         <!DOCTYPE html>
         <html>
@@ -52,54 +61,52 @@ export async function requestPasswordReset(formData) {
             @import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;700&family=Manrope:wght@300;400;600&display=swap');
           </style>
         </head>
-        <body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+        <body style="margin: 0; padding: 0; background-color: #ffffff; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
           
-          <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4; padding: 60px 0;">
+          <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; padding: 60px 0;">
             <tr>
               <td align="center">
                 
-                <table width="500" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 1px solid #e0e0e0; box-shadow: 0 10px 40px rgba(0,0,0,0.05);">
+                <table width="500" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 1px solid #f0f0f0; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
                   
                   <tr>
-                    <td align="center" style="padding: 50px 0 30px 0;">
-                      <h1 style="margin: 0; font-family: 'Times New Roman', serif; font-size: 28px; letter-spacing: 4px; color: #000000; text-transform: uppercase;">
-                        ANAQA
-                      </h1>
-                      <p style="margin: 5px 0 0 0; font-size: 9px; letter-spacing: 3px; color: #D4AF37; text-transform: uppercase; font-weight: bold;">
-                        The Sanctuary
-                      </p>
+                    <td align="center" style="padding: 50px 0 20px 0; background-color: #000000;">
+                      <img src="cid:oura-logo" alt="OURA" style="width: 200px; display: block;" />
                     </td>
                   </tr>
-
+                  
                   <tr>
                     <td align="center">
-                       <div style="width: 40px; height: 1px; background-color: #D4AF37;"></div>
+                       <div style="width: 100%; height: 4px; background-color: #B91C1C;"></div>
                     </td>
                   </tr>
 
                   <tr>
-                    <td align="center" style="padding: 40px 50px;">
-                      <h3 style="margin: 0 0 20px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #000000;">
-                        Password Recovery
+                    <td align="center" style="padding: 50px 50px;">
+                      <h3 style="margin: 0 0 20px 0; font-family: 'Times New Roman', serif; font-size: 24px; color: #000000; font-weight: bold;">
+                        Reset Password
                       </h3>
-                      <p style="margin: 0 0 40px 0; font-size: 13px; line-height: 26px; color: #666666; font-weight: 300;">
-                        We received a request to restore access to your account. 
-                        To maintain the security of your profile, please use the secure link below to set a new passcode.
+                      
+                      <p style="margin: 0 0 30px 0; font-size: 14px; line-height: 24px; color: #666666;">
+                        We received a request to regain access to your OURA account. 
+                        Please click the button below to create a new secure password.
                       </p>
 
-                      <a href="${resetLink}" style="display: inline-block; background-color: #000000; color: #ffffff; text-decoration: none; padding: 18px 40px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; border: 1px solid #000000;">
-                        Reset Password
+                      <a href="${resetLink}" style="display: inline-block; background-color: #B91C1C; color: #ffffff; text-decoration: none; padding: 16px 40px; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; border-radius: 4px;">
+                        Reset Access
                       </a>
+                      
+                      <p style="margin: 30px 0 0 0; font-size: 11px; color: #999999; line-height: 1.6;">
+                        If you did not request this change, please ignore this email.<br/>
+                        This link will expire in 60 minutes.
+                      </p>
                     </td>
                   </tr>
 
                   <tr>
-                    <td align="center" style="padding: 0 50px 50px 50px;">
-                       <p style="margin: 0; font-size: 11px; color: #999999; font-style: italic;">
-                         This link is valid for 60 minutes.
-                       </p>
-                       <p style="margin: 10px 0 0 0; font-size: 10px; color: #cccccc; text-transform: uppercase; letter-spacing: 1px;">
-                         &copy; ${new Date().getFullYear()} ANAQA Luxury
+                    <td align="center" style="padding: 20px 50px 40px 50px; background-color: #fafafa; border-top: 1px solid #eeeeee;">
+                       <p style="margin: 0; font-size: 10px; color: #bbbbbb; text-transform: uppercase; letter-spacing: 1px;">
+                         &copy; ${new Date().getFullYear()} OURA Collection
                        </p>
                     </td>
                   </tr>

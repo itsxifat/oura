@@ -104,16 +104,9 @@ const Hero = ({ heroData }) => {
   const targetLink = slide.buttonLayer?.link?.trim() ? slide.buttonLayer.link : '/product';
 
   return (
-    // OUTER CONTAINER: 
-    // - Mobile: Full width, No padding
-    // - Desktop: Side padding (px-6), Centered with max-w constraint
+    // OUTER CONTAINER
     <section className="w-full bg-white pb-0 md:pb-6 px-0 md:px-6 pt-0 mt-0 flex justify-center">
       
-      {/* CARD CONTAINER: 
-          - Mobile: aspect-[4/5], rounded-none (Full Screen Width Feel)
-          - Desktop: aspect-[19/6], rounded-md (Cinematic Banner Ratio)
-          - Max Width: Controlled for large screens
-      */}
       <div className="relative w-full max-w-[2400px] aspect-[4/5] md:aspect-[21/8] mx-auto rounded-none md:rounded-md overflow-hidden bg-neutral-900 isolate transform transition-all md:mt-3.5 group/card touch-pan-y">
         
         {/* =============================================
@@ -143,33 +136,33 @@ const Hero = ({ heroData }) => {
               className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
             >
                <div className="relative w-full h-full">
-                  {/* Gradient Overlay - Stronger at bottom for text legibility */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent z-10 pointer-events-none" />
-                  
-                  {/* Images */}
-                  <img 
-                    src={slide.imageDesktop || slide.image} 
-                    alt={slide.title || "Hero Image"} 
-                    className={`w-full h-full object-cover select-none pointer-events-none ${slide.imageMobile || slide.mobileImage ? 'hidden md:block' : 'block'}`}
-                    draggable="false"
-                  />
-                  
-                  {(slide.imageMobile || slide.mobileImage) && (
-                    <img 
-                      src={slide.imageMobile || slide.mobileImage} 
-                      alt={slide.title || "Hero Mobile"} 
-                      className="w-full h-full object-cover md:hidden select-none pointer-events-none" 
-                      draggable="false"
-                    />
-                  )}
+                 
+                 {/* ✅ REMOVED THE BLACK GRADIENT OVERLAY HERE */}
+                 
+                 {/* Images */}
+                 <img 
+                   src={slide.imageDesktop || slide.image} 
+                   alt={slide.title || "Hero Image"} 
+                   className={`w-full h-full object-cover select-none pointer-events-none ${slide.imageMobile || slide.mobileImage ? 'hidden md:block' : 'block'}`}
+                   draggable="false"
+                 />
+                 
+                 {(slide.imageMobile || slide.mobileImage) && (
+                   <img 
+                     src={slide.imageMobile || slide.mobileImage} 
+                     alt={slide.title || "Hero Mobile"} 
+                     className="w-full h-full object-cover md:hidden select-none pointer-events-none" 
+                     draggable="false"
+                   />
+                 )}
 
-                  {/* Link Overlay */}
-                  <Link 
-                    href={targetLink} 
-                    className="absolute inset-0 z-10 w-full h-full"
-                    draggable="false"
-                    aria-label="Go to product"
-                  />
+                 {/* Link Overlay */}
+                 <Link 
+                   href={targetLink} 
+                   className="absolute inset-0 z-10 w-full h-full"
+                   draggable="false"
+                   aria-label="Go to product"
+                 />
                </div>
             </motion.div>
           </AnimatePresence>
@@ -187,50 +180,50 @@ const Hero = ({ heroData }) => {
                     
                     {slide.subtitle && (
                       <motion.div 
-                         variants={textVariants} custom={0} initial="hidden" animate="visible" exit="hidden"
-                         className="flex items-center gap-3"
+                          variants={textVariants} custom={0} initial="hidden" animate="visible" exit="hidden"
+                          className="flex items-center gap-3"
                       >
-                         {/* RED SHADE ACCENT: Subtitle Dash */}
-                         <span className="w-8 h-[2px] bg-[#B91C1C]" />
-                         <span className="font-sans text-white/90 text-[10px] md:text-xs font-bold uppercase tracking-[0.25em]">
-                            {slide.subtitle}
-                         </span>
+                          {/* RED SHADE ACCENT: Subtitle Dash */}
+                          <span className="w-8 h-[2px] bg-[#B91C1C]" />
+                          <span className="font-sans text-white/90 text-[10px] md:text-xs font-bold uppercase tracking-[0.25em] drop-shadow-md">
+                             {slide.subtitle}
+                          </span>
                       </motion.div>
                     )}
 
                     {slide.title && (
                       <motion.h1 
-                         variants={textVariants} custom={0.1} initial="hidden" animate="visible" exit="hidden"
-                         className="font-heading font-black text-4xl md:text-6xl lg:text-8xl text-white uppercase tracking-tighter leading-[0.9]"
+                          variants={textVariants} custom={0.1} initial="hidden" animate="visible" exit="hidden"
+                          className="font-heading font-black text-4xl md:text-6xl lg:text-8xl text-white uppercase tracking-tighter leading-[0.9] drop-shadow-lg"
                       >
-                         {slide.title}
+                          {slide.title}
                       </motion.h1>
                     )}
                   </div>
 
                   {/* Button & Description */}
                   {(slide.description || (slide.buttonLayer && slide.buttonLayer.text)) && (
-                    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 md:gap-6 border-t border-white/10 pt-4 md:pt-6">
-                       
-                       {slide.description ? (
-                         <motion.p 
+                    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 md:gap-6 border-t border-white/20 pt-4 md:pt-6">
+                        
+                        {slide.description ? (
+                          <motion.p 
                             variants={textVariants} custom={0.2} initial="hidden" animate="visible" exit="hidden"
-                            className="text-white/70 text-xs md:text-sm max-w-lg leading-relaxed font-sans hidden md:block"
-                         >
-                            {slide.description}
-                         </motion.p>
-                       ) : <div />}
+                            className="text-white/90 text-xs md:text-sm max-w-lg leading-relaxed font-sans hidden md:block drop-shadow-md font-medium"
+                          >
+                             {slide.description}
+                          </motion.p>
+                        ) : <div />}
 
-                       {slide.buttonLayer?.text && (
-                         <motion.div 
+                        {slide.buttonLayer?.text && (
+                          <motion.div 
                             variants={textVariants} custom={0.3} initial="hidden" animate="visible" exit="hidden"
                             className="pointer-events-auto"
-                         >
-                            <ModernButton link={targetLink}>
-                               {slide.buttonLayer.text}
-                            </ModernButton>
-                         </motion.div>
-                       )}
+                          >
+                             <ModernButton link={targetLink}>
+                                {slide.buttonLayer.text}
+                             </ModernButton>
+                          </motion.div>
+                        )}
                     </div>
                   )}
 
@@ -244,27 +237,27 @@ const Hero = ({ heroData }) => {
         <div className="absolute bottom-8 right-8 z-30 hidden md:flex gap-2 pointer-events-auto">
             <button 
                onClick={() => paginate(-1)}
-               className="w-12 h-12 rounded-md border border-white/10 bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-[#B91C1C] hover:border-[#B91C1C] transition-all duration-300 group"
+               className="w-12 h-12 rounded-md border border-white/20 bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-[#B91C1C] hover:border-[#B91C1C] transition-all duration-300 group shadow-lg"
             >
                <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
             </button>
             <button 
                onClick={() => paginate(1)}
-               className="w-12 h-12 rounded-md border border-white/10 bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-[#B91C1C] hover:border-[#B91C1C] transition-all duration-300 group"
+               className="w-12 h-12 rounded-md border border-white/20 bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-[#B91C1C] hover:border-[#B91C1C] transition-all duration-300 group shadow-lg"
             >
                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </button>
         </div>
 
         {/* RED SHADE ACCENT: Progress Bar (Visible Mobile & Desktop) */}
-        <div className="absolute bottom-0 left-0 w-full h-[3px] z-30 bg-white/5">
-             <motion.div 
-               key={currentIndex}
-               initial={{ width: "0%" }}
-               animate={{ width: "100%" }}
-               transition={{ duration: AUTOPLAY_DELAY / 1000, ease: "linear" }}
-               className="h-full bg-[#B91C1C]"
-             />
+        <div className="absolute bottom-0 left-0 w-full h-[3px] z-30 bg-white/10">
+              <motion.div 
+                key={currentIndex}
+                initial={{ width: "0%" }}
+                animate={{ width: "100%" }}
+                transition={{ duration: AUTOPLAY_DELAY / 1000, ease: "linear" }}
+                className="h-full bg-[#B91C1C]"
+              />
         </div>
 
       </div>

@@ -1,6 +1,6 @@
 import connectDB from '@/lib/db';
 import SiteContent from '@/models/SiteContent';
-import User from '@/models/User'; // Import User model
+import User from '@/models/User'; 
 import Navbar from '@/components/Navbar'; 
 import AccountDashboard from '@/components/AccountDashboard'; 
 import { getServerSession } from "next-auth";
@@ -17,22 +17,24 @@ export default async function AccountPage() {
   
   const navData = {
     logoImage: "/logo.png",
-    logoText: "ANAQA",
+    logoText: "OURA",
     links: siteContent?.navbarLinks ? JSON.parse(JSON.stringify(siteContent.navbarLinks)) : []
   };
 
-  // 2. Check if user has a password set (Crucial for Google Users)
+  // 2. Check Password Status
   let userHasPassword = false;
   if (session?.user?.email) {
     const userDoc = await User.findOne({ email: session.user.email }).select('password').lean();
-    userHasPassword = !!userDoc?.password; // True if password exists, False if Google only
+    userHasPassword = !!userDoc?.password; 
   }
 
   return (
-    <div className="bg-[#faf9f6] min-h-screen">
+    // ✅ FIX: White background & reduced padding to fix "too much margin"
+    <div className="bg-white min-h-screen">
       <Navbar navData={navData} />
-      <main className="pt-24 md:pt-32">
-        {/* Pass the flag to the dashboard */}
+      
+      {/* Reduced top padding just enough to clear the fixed Navbar */}
+      <main className=""> 
         <AccountDashboard userHasPassword={userHasPassword} />
       </main>
     </div>

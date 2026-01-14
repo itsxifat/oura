@@ -65,7 +65,8 @@ const MobileMenu = ({ isOpen, onClose, navData, session }) => {
             {/* Header */}
             <div className="flex justify-between items-center p-5 border-b border-gray-100 shrink-0 bg-white">
               <div className="w-20">
-                <img src="/logo.png" alt="OURA" className="w-full object-contain opacity-90" />
+                {/* Removed 'opacity-90' to make the image clear */}
+                <img src="/logo.png" alt="OURA" className="w-full object-contain" />
               </div>
               <button onClick={onClose} className="p-2 hover:bg-gray-100 text-gray-800 transition rounded-full">
                 <X size={20} strokeWidth={1} />
@@ -77,12 +78,12 @@ const MobileMenu = ({ isOpen, onClose, navData, session }) => {
               {navData?.links?.map((link) => (
                 <div key={link.label} className="border-b border-gray-50 pb-2 last:border-0">
                   <div className="flex justify-between items-center py-2 group cursor-pointer" onClick={() => setActiveSub(activeSub === link.label ? null : link.label)}>
-                     <Link href={link.href || '#'} onClick={(e) => { if(!link.children?.length) onClose(); }} className="font-sans text-sm font-semibold uppercase tracking-wider text-gray-800 group-hover:text-[#B91C1C] transition">
-                       {link.label}
-                     </Link>
-                     {link.children?.length > 0 && (
-                       <ChevronDown size={16} strokeWidth={1.5} className={`text-gray-400 transition-transform duration-300 ${activeSub === link.label ? 'rotate-180 text-[#B91C1C]' : ''}`} />
-                     )}
+                      <Link href={link.href || '#'} onClick={(e) => { if(!link.children?.length) onClose(); }} className="font-sans text-sm font-semibold uppercase tracking-wider text-gray-800 group-hover:text-[#B91C1C] transition">
+                        {link.label}
+                      </Link>
+                      {link.children?.length > 0 && (
+                        <ChevronDown size={16} strokeWidth={1.5} className={`text-gray-400 transition-transform duration-300 ${activeSub === link.label ? 'rotate-180 text-[#B91C1C]' : ''}`} />
+                      )}
                   </div>
                   <AnimatePresence>
                     {activeSub === link.label && link.children && (
@@ -235,21 +236,21 @@ const Navbar = ({ navData }) => {
             <div className="flex items-center justify-end gap-5 flex-1">
               <div className="hidden lg:block relative" ref={profileRef}>
                 {session ? (
-                   <div className="flex items-center gap-2 cursor-pointer py-1 px-1 rounded-full hover:bg-gray-50 transition group" onClick={() => setProfileOpen(!profileOpen)}>
-                     {session.user?.image ? (
+                    <div className="flex items-center gap-2 cursor-pointer py-1 px-1 rounded-full hover:bg-gray-50 transition group" onClick={() => setProfileOpen(!profileOpen)}>
+                      {session.user?.image ? (
                         <img src={session.user.image} alt="User" className="w-6 h-6 rounded-full object-cover border border-gray-200" />
-                     ) : (
+                      ) : (
                         <div className="w-6 h-6 bg-[#B91C1C] text-white flex items-center justify-center font-sans font-bold text-[10px] rounded-full">
-                           {session.user?.name?.charAt(0).toUpperCase()}
+                            {session.user?.name?.charAt(0).toUpperCase()}
                         </div>
-                     )}
-                     <span className="font-sans text-[11px] font-semibold text-gray-700 hidden xl:block group-hover:text-black transition-colors uppercase tracking-wide">{session.user?.name?.split(' ')[0]}</span>
-                   </div>
+                      )}
+                      <span className="font-sans text-[11px] font-semibold text-gray-700 hidden xl:block group-hover:text-black transition-colors uppercase tracking-wide">{session.user?.name?.split(' ')[0]}</span>
+                    </div>
                 ) : (
-                   <Link href="/login" className="flex items-center opacity-60 hover:opacity-100 hover:text-[#B91C1C] transition gap-2">
-                     <User size={18} strokeWidth={1.5} />
-                     <span className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] hidden xl:block">Sign In</span>
-                   </Link>
+                    <Link href="/login" className="flex items-center opacity-60 hover:opacity-100 hover:text-[#B91C1C] transition gap-2">
+                      <User size={18} strokeWidth={1.5} />
+                      <span className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] hidden xl:block">Sign In</span>
+                    </Link>
                 )}
                 
                 {/* Profile Dropdown */}
@@ -274,9 +275,9 @@ const Navbar = ({ navData }) => {
               <Link href="/cart" className="relative transition group">
                 <ShoppingBag size={20} strokeWidth={1.5} className="text-gray-900 group-hover:text-[#B91C1C] transition-colors" />
                 {mounted && cartCount > 0 && (
-                   <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#B91C1C] text-white text-[8px] font-bold flex items-center justify-center rounded-full px-0.5 shadow-sm">
-                     {cartCount > 99 ? '99' : cartCount}
-                   </span>
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#B91C1C] text-white text-[8px] font-bold flex items-center justify-center rounded-full px-0.5 shadow-sm">
+                      {cartCount > 99 ? '99' : cartCount}
+                    </span>
                 )}
               </Link>
             </div>
@@ -322,7 +323,7 @@ const Navbar = ({ navData }) => {
                   <div className="col-span-3 border-r border-gray-100 pr-8 flex flex-col justify-center">
                     <h2 className="font-sans text-3xl font-bold uppercase tracking-tight text-gray-900 mb-4">{activeCategory.label}</h2>
                     <Link href={activeCategory.href || '#'} className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#B91C1C] hover:text-black transition-colors group">
-                       View All <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform"/>
+                        View All <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform"/>
                     </Link>
                   </div>
                   

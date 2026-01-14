@@ -63,7 +63,7 @@ export default function StockVariantManager({ masterSizes = [], value = [], onCh
       {/* Header */}
       <div className="flex justify-between items-center mb-5 border-b border-gray-50 pb-4">
         <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-black text-white rounded">
+            <div className="p-1.5 bg-[#B91C1C] text-white rounded">
                 <Layers size={14} />
             </div>
             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Stock</span>
@@ -79,8 +79,8 @@ export default function StockVariantManager({ masterSizes = [], value = [], onCh
                     Clear
                 </button>
             )}
-            <div className="bg-[#fffdf5] border border-[#D4AF37]/30 px-3 py-1 rounded-full flex items-center gap-2">
-                <Archive size={12} className="text-[#D4AF37]"/>
+            <div className="bg-[#fff5f5] border border-[#B91C1C]/20 px-3 py-1 rounded-full flex items-center gap-2">
+                <Archive size={12} className="text-[#B91C1C]"/>
                 <span className="text-xs font-bold font-mono text-black">{totalStock}</span>
             </div>
         </div>
@@ -131,7 +131,7 @@ export default function StockVariantManager({ masterSizes = [], value = [], onCh
                         />
                         {/* Status Dot */}
                         {hasStock && (
-                            <div className="absolute top-1/2 left-0 -translate-y-1/2 w-1 h-1 rounded-full bg-[#D4AF37]" />
+                            <div className="absolute top-1/2 left-0 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#B91C1C]" />
                         )}
                     </div>
                 </div>

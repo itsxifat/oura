@@ -84,7 +84,7 @@ export async function getNavbarConfig() {
   await connectDB();
   try {
     const content = await SiteContent.findOne({ identifier: 'main_layout' }).lean();
-    if (!content || !content.navbarLinks) return { logoText: 'ANAQA', logoImage: '', links: [] };
-    return { logoText: 'ANAQA', logoImage: '', links: JSON.parse(JSON.stringify(content.navbarLinks)) };
-  } catch (error) { return { logoText: 'ANAQA', links: [] }; }
+    if (!content || !content.navbarLinks) return { logoText: 'OURA', logoImage: '', links: [] };
+    return { logoText: 'OURA', logoImage: '', links: JSON.parse(JSON.stringify(content.navbarLinks)) };
+  } catch (error) { return { logoText: 'OURA', links: [] }; }
 }

@@ -1,10 +1,12 @@
-import AdminSidebar from './components/AdminSidebar';
 import AdminLoginPage from './login/page'; 
+import AdminLayoutWrapper from './components/AdminLayoutWrapper'; // Handles Sidebar & Mobile Layout
 import { verifyAdminToken, authOptions } from '@/lib/auth';
 import { getServerSession } from "next-auth";
 import { cookies } from 'next/headers';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
+
+export const dynamic = 'force-dynamic';
 
 export default async function AdminLayout({ children }) {
   // 1. Check Legacy Master Key
@@ -22,12 +24,10 @@ export default async function AdminLayout({ children }) {
   const session = await getServerSession(authOptions);
   
   if (session?.user?.email) {
-    // If session says admin, trust it
     if (session.user.role === 'admin') {
       isAccountAdmin = true;
-    } 
-    // FALLBACK: If session is stale (says 'user'), check DB directly to see if they were promoted
-    else {
+    } else {
+      // Fallback: Check DB if session is stale
       await connectDB();
       const dbUser = await User.findOne({ email: session.user.email }).select('role');
       if (dbUser && dbUser.role === 'admin') {
@@ -39,18 +39,15 @@ export default async function AdminLayout({ children }) {
   // 3. Authenticate
   const isAuthenticated = isLegacyAdmin || isAccountAdmin;
 
-  // 4. Render Login if failed (Render-in-Place, prevents redirect loops)
+  // 4. Render Login if failed (Render-in-Place)
   if (!isAuthenticated) {
     return <AdminLoginPage />;
   }
 
-  // 5. Render Dashboard
+  // 5. Render Admin Layout (Session is now provided by RootLayout)
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50">
-      <AdminSidebar />
-      <main className="flex-1 lg:ml-[280px]">
-        {children}
-      </main>
-    </div>
+    <AdminLayoutWrapper>
+      {children}
+    </AdminLayoutWrapper>
   );
 }

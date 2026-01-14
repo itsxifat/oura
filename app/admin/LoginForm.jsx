@@ -23,7 +23,7 @@ export default function LoginForm() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
       <form action={handleSubmit} className="p-8 md:p-10 bg-white rounded-2xl shadow-xl w-full max-w-sm border border-gray-100">
         <div className="mb-8 text-center">
-          <h1 className="font-classic text-3xl font-bold text-gray-900">ANAQA</h1>
+          <h1 className="font-classic text-3xl font-bold text-gray-900">OURA</h1>
           <p className="text-sm text-gray-500 uppercase tracking-widest mt-2">Admin Portal</p>
         </div>
         

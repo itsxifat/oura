@@ -13,7 +13,7 @@ export default async function CheckoutPage() {
   const siteContent = await SiteContent.findOne({ identifier: 'main_layout' }).lean();
   const navData = {
     logoImage: "/logo.png",
-    logoText: "ANAQA",
+    logoText: "OURA",
     links: siteContent?.navbarLinks ? JSON.parse(JSON.stringify(siteContent.navbarLinks)) : []
   };
 

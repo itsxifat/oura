@@ -13,7 +13,7 @@ export default async function OrdersPage() {
   
   const navData = {
     logoImage: "/logo.png",
-    logoText: "ANAQA",
+    logoText: "OURA",
     links: siteContent?.navbarLinks ? JSON.parse(JSON.stringify(siteContent.navbarLinks)) : []
   };
 

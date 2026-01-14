@@ -22,7 +22,7 @@ const generateUserEmail = (name, store, subject) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="x-apple-disable-message-reformatting">
-  <title>Appointment Confirmation | ANAQA</title>
+  <title>Appointment Confirmation | OURA</title>
   <style>
     table, td, div, h1, p {font-family: 'Times New Roman', Times, serif;}
     @import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;600&family=Manrope:wght@300;400;600&display=swap');
@@ -38,7 +38,7 @@ const generateUserEmail = (name, store, subject) => {
             
             <tr>
               <td style="padding:60px 0 30px 0;">
-                <h1 style="margin:0;font-size:48px;letter-spacing:6px;font-weight:600;color:#000000;text-transform:uppercase;">ANAQA</h1>
+                <h1 style="margin:0;font-size:48px;letter-spacing:6px;font-weight:600;color:#000000;text-transform:uppercase;">OURA</h1>
                 <p style="margin:12px 0 0;font-family:'Manrope', sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:4px;color:#D4AF37;">Dhaka &bull; Est. 2025</p>
               </td>
             </tr>
@@ -89,7 +89,7 @@ const generateUserEmail = (name, store, subject) => {
                 <p style="margin:0 0 25px;font-family:'Manrope', sans-serif;font-size:16px;color:#ffffff;letter-spacing:1px;">+880 1234 567 89</p>
                 
                 <p style="margin:0;font-family:'Manrope', sans-serif;font-size:10px;color:#666666;line-height:20px;">
-                  © 2025 ANAQA. 128 Gulshan Avenue, Dhaka.<br>
+                  © 2025 OURA. 128 Gulshan Avenue, Dhaka.<br>
                   Heritage craftsmanship for the modern era.
                 </p>
               </td>
@@ -112,7 +112,7 @@ const generateAdminEmail = (data) => {
   const { name, company, email, phone, whatsapp, store, subject, details } = data;
   
   const waNumber = (whatsapp || phone).replace(/[^0-9]/g, '');
-  const waLink = `https://wa.me/${waNumber}?text=Hello ${name}, contacting from ANAQA regarding your appointment request.`;
+  const waLink = `https://wa.me/${waNumber}?text=Hello ${name}, contacting from OURA regarding your appointment request.`;
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' });
 
   return `
@@ -206,7 +206,7 @@ const generateAdminEmail = (data) => {
     </div>
 
     <div class="footer">
-      Generated at ${timestamp} • ANAQA Internal System
+      Generated at ${timestamp} • OURA Internal System
     </div>
   </div>
 </body>
@@ -226,7 +226,7 @@ export async function requestAppointment(formData) {
 
   try {
     const sendAdmin = transporter.sendMail({
-      from: `"ANAQA System" <${process.env.GMAIL_USER}>`,
+      from: `"OURA System" <${process.env.GMAIL_USER}>`,
       to: process.env.ADMIN_EMAIL,
       replyTo: email,
       subject: `[LEAD] ${name} - ${formData.store}`,
@@ -234,7 +234,7 @@ export async function requestAppointment(formData) {
     });
 
     const sendUser = transporter.sendMail({
-      from: `"ANAQA Concierge" <${process.env.GMAIL_USER}>`,
+      from: `"OURA Concierge" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: `Received: Your Appointment Request at ${formData.store}`,
       html: generateUserEmail(name, formData.store, formData.subject),
