@@ -94,7 +94,7 @@ async function reserveStock(items) {
 // items must have: { _id or product (productId), size, quantity, hasSize? }
 async function releaseStockItems(items) {
   for (const item of items) {
-    const productId = item._id || item.product;
+    const productId = item.product || item._id;
     const qty  = item.quantity;
     const size = item.size;
     const hasSize = item.hasSize ?? (size && size !== 'STD' && size !== 'Standard');
@@ -772,7 +772,7 @@ export async function releasePendingOrderStock(pendingId, reason = 'payment_fail
 // without being confirmed (abandoned payments). Safe to call on a cron or at startup.
 export async function releaseExpiredPendingOrders() {
   await connectDB();
-  const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 2 * 60 * 1000); // 2 min stock hold window
   const expired = await PendingOrder.find({
     stockReserved: true,
     confirming: { $ne: true },

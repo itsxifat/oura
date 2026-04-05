@@ -35,8 +35,8 @@ const PendingOrderSchema = new mongoose.Schema({
   ip:        { type: String, default: '' },
   deviceId:  { type: String, default: '' },
   userAgent: { type: String, default: '' },
-  // TTL: auto-delete after 2 hours if not confirmed
-  createdAt: { type: Date, default: Date.now, expires: 7200 },
+  // TTL: auto-delete after 2 min if not confirmed (stock hold window)
+  createdAt: { type: Date, default: Date.now, expires: 120 },
 });
 
 export default mongoose.models.PendingOrder
