@@ -9,6 +9,7 @@ import Coupon from '@/models/Coupon';
 import Address from '@/models/Address';
 import User from '@/models/User';
 import Settings from '@/models/Settings';
+import GlobalSetting from '@/models/GlobalSetting';
 import Tag from '@/models/Tag';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -17,6 +18,17 @@ import { calculateCart } from './cart';
 import { assertAdmin, assertSession, isValidObjectId, sanitizeString } from '@/lib/security';
 
 const serialize = (obj) => JSON.parse(JSON.stringify(obj));
+
+// Atomically increment and return the next invoice sequence for the given year.
+// Uses GlobalSetting as a counter store so concurrent requests never collide.
+async function nextInvoiceSeq(year) {
+  const doc = await GlobalSetting.findOneAndUpdate(
+    { identifier: `invoice_seq_${year}` },
+    { $inc: { value: 1 } },
+    { new: true, upsert: true }
+  );
+  return doc.value;
+}
 
 const ALLOWED_STATUSES = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
@@ -267,9 +279,9 @@ export async function createOrder(orderData) {
   const freeDelivery = deliverySettings?.value?.freeDelivery ?? false;
   const shippingFee = freeDelivery ? 0 : (orderData.shippingAddress?.method === 'outside' ? outsideCost : insideCost);
 
-  const count = await Order.countDocuments();
   const year  = new Date().getFullYear();
-  const seq   = String(count + 1).padStart(4, '0');
+  const seq   = String(await nextInvoiceSeq(year)).padStart(4, '0');
+  const count = await Order.countDocuments();
 
   // Only take explicitly allowed fields from orderData — never spread it directly
   const newOrder = new Order({
@@ -486,9 +498,9 @@ export async function confirmPendingOrder(pendingId, paymentDetails) {
     }
   }
 
-  const count = await Order.countDocuments();
   const year  = new Date().getFullYear();
-  const seq   = String(count + 1).padStart(4, '0');
+  const seq   = String(await nextInvoiceSeq(year)).padStart(4, '0');
+  const count = await Order.countDocuments();
 
   const newOrder = new Order({
     user:            pending.userId,
