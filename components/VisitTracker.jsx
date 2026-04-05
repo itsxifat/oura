@@ -5,36 +5,77 @@ import { useSession } from 'next-auth/react';
 
 const DEVICE_ID_KEY  = 'oura_device_id';
 const LAST_TRACK_KEY = 'oura_last_track';
-const LAST_USER_KEY  = 'oura_last_user';   // tracks which user was last recorded
+const LAST_USER_KEY  = 'oura_last_user';
 const TRACK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
- * Invisible component — drop it anywhere in the layout (once).
+ * Generates a stable browser fingerprint from public browser APIs.
+ * Stored in localStorage so it persists across sessions.
+ * Uses the same key (oura_device_id) as CheckoutClient so they share one ID.
+ */
+function buildDeviceFingerprint() {
+  try {
+    const parts = [
+      navigator.userAgent,
+      navigator.language,
+      `${screen.width}x${screen.height}x${screen.colorDepth}`,
+      new Intl.DateTimeFormat().resolvedOptions().timeZone,
+      String(navigator.hardwareConcurrency || 0),
+      navigator.platform || '',
+      String(!!navigator.cookieEnabled),
+      String(typeof window.indexedDB !== 'undefined'),
+    ].join('||');
+    let h = 5381;
+    for (let i = 0; i < parts.length; i++) {
+      h = Math.imul(h, 33) ^ parts.charCodeAt(i);
+    }
+    return `fp_${(h >>> 0).toString(36)}`;
+  } catch {
+    return `fp_${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function getOrCreateDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = buildDeviceFingerprint();
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return buildDeviceFingerprint();
+  }
+}
+
+/**
+ * Invisible component — rendered once in the root layout.
  * Fires POST /api/track to record the user's IP and device fingerprint when:
- *  1. The logged-in user changes (login, account switch) — always fires immediately
+ *  1. User logs in or changes (userId differs from last stored) — fires immediately
  *  2. 24 hours have elapsed since the last successful track
- *  3. The user has no stored IP yet — covered by case 1 on first visit after login
+ *
+ * The device ID is always generated/retrieved here, so even users who have
+ * never visited checkout will have their device recorded.
  */
 export default function VisitTracker() {
   const { data: session, status } = useSession();
   const userId = session?.user?.id || '';
 
   useEffect(() => {
-    // Wait until session is resolved — avoid double-firing during hydration
+    // Wait for session to resolve before acting to avoid double-fires
     if (status === 'loading') return;
 
     try {
       const last     = parseInt(localStorage.getItem(LAST_TRACK_KEY) || '0', 10);
       const lastUser = localStorage.getItem(LAST_USER_KEY) || '';
 
-      // Fire immediately when: new login (userId changed) OR 24h elapsed
-      const userChanged    = !!userId && userId !== lastUser;
+      const userChanged     = !!userId && userId !== lastUser;
       const intervalElapsed = Date.now() - last >= TRACK_INTERVAL;
 
       if (!userChanged && !intervalElapsed) return;
 
-      // Anonymous users: still track interval but no userId to compare
-      const deviceId = localStorage.getItem(DEVICE_ID_KEY) || '';
+      // Always generate/retrieve device ID — creates it if missing
+      const deviceId = getOrCreateDeviceId();
 
       fetch('/api/track', {
         method:  'POST',
@@ -45,9 +86,9 @@ export default function VisitTracker() {
         if (userId) localStorage.setItem(LAST_USER_KEY, userId);
       }).catch(() => {});
     } catch {
-      // localStorage not available (SSR guard) — ignore
+      // localStorage not available — ignore
     }
-  }, [userId, status]); // re-run when user logs in/out or session resolves
+  }, [userId, status]);
 
   return null;
 }

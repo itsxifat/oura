@@ -443,8 +443,8 @@ export async function createOrder(orderData) {
   await trackAttempt({ ip, deviceId, userId, userAgent, type: 'order_created',
     productIds: calcResult.validatedCart.map(i => String(i._id)) });
 
-  // Update the user's known IPs and devices
-  trackUserActivity(userId, { ip, deviceId, userAgent });
+  // Update the user's known IPs and devices (fire-and-forget, never blocks order)
+  trackUserActivity(userId, { ip, deviceId, userAgent }).catch(() => {});
 
   if (calcResult.appliedCoupon) {
     await Coupon.findOneAndUpdate(
@@ -732,11 +732,11 @@ export async function confirmPendingOrder(pendingId, paymentDetails) {
   await PendingOrder.findByIdAndDelete(pendingId);
   revalidatePath('/admin/orders');
 
-  // Update the user's known IPs and devices
+  // Update the user's known IPs and devices (fire-and-forget)
   if (pending.ip || pending.deviceId) {
     trackUserActivity(pending.userId, {
       ip: pending.ip, deviceId: pending.deviceId, userAgent: pending.userAgent,
-    });
+    }).catch(() => {});
   }
 
   return { success: true, orderId: newOrder.orderId };
