@@ -129,7 +129,7 @@ async function nextInvoiceSeq(year) {
   const doc = await GlobalSetting.findOneAndUpdate(
     { identifier: `invoice_seq_${year}` },
     [{ $set: { value: { $add: [{ $max: [{ $ifNull: ['$value', 0] }, maxSeq] }, 1] } } }],
-    { new: true, upsert: true }
+    { new: true, upsert: true, updatePipeline: true }
   );
 
   return doc.value;
