@@ -44,22 +44,64 @@ function Avatar({ user, size = 'md' }) {
   );
 }
 
-// ── Block button ───────────────────────────────────────────────────────────────
-function BlockBtn({ type, value, label, onBlocked }) {
-  const [busy, setBusy] = useState(false);
-  const handle = async () => {
-    if (!confirm(`Block ${type}: ${value}?\nThis will prevent any orders from this ${type} for 30 days.`)) return;
+// ── Block / Unblock control ────────────────────────────────────────────────────
+// For IP and device: shows [30d] [Perm] buttons when not blocked, [Unblock] when blocked.
+function BlockControl({ type, value, blocked: initialBlocked, onDone }) {
+  const [blocked, setBlocked] = useState(initialBlocked);
+  const [busy,    setBusy]    = useState(false);
+
+  const handleBlock = async (days) => {
+    const durationHours = days === 'perm' ? null : days * 24;
+    const label = days === 'perm' ? 'permanently' : `for ${days} days`;
+    const subject = type === 'user' ? 'this user account' : `${type} "${value}"`;
+    if (!confirm(`Block ${subject} ${label}?`)) return;
     setBusy(true);
-    await blockEntity({ type, value, reason: `Admin blocked ${type} from user panel`, durationHours: 720 });
+    await blockEntity({ type, value, reason: `Admin blocked ${type}`, durationHours });
+    setBlocked(true);
     setBusy(false);
-    onBlocked?.();
+    onDone?.();
   };
+
+  const handleUnblock = async () => {
+    if (!confirm(`Unblock ${type} "${value}"?`)) return;
+    setBusy(true);
+    await unblockEntity({ type, value });
+    setBlocked(false);
+    setBusy(false);
+    onDone?.();
+  };
+
+  if (busy) return <Loader2 size={10} className="animate-spin text-gray-400 shrink-0"/>;
+
+  if (blocked) {
+    return (
+      <button onClick={handleUnblock}
+        className="flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded border border-green-200 text-green-600 hover:bg-green-50 transition-colors shrink-0">
+        <CheckCircle2 size={10}/> Unblock
+      </button>
+    );
+  }
+
+  if (type === 'user') {
+    return (
+      <button onClick={() => handleBlock('perm')}
+        className="flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded border border-red-400 text-red-700 hover:bg-red-50 transition-colors shrink-0">
+        <Ban size={10}/> Permanent Ban
+      </button>
+    );
+  }
+
   return (
-    <button onClick={handle} disabled={busy}
-      className="flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
-      {busy ? <Loader2 size={10} className="animate-spin"/> : <WifiOff size={10}/>}
-      {label}
-    </button>
+    <div className="flex items-center gap-1 shrink-0">
+      <button onClick={() => handleBlock(30)}
+        className="text-[10px] font-bold uppercase px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
+        30d
+      </button>
+      <button onClick={() => handleBlock('perm')}
+        className="text-[10px] font-bold uppercase px-2 py-1 rounded border border-red-400 text-red-700 hover:bg-red-50 transition-colors">
+        Perm
+      </button>
+    </div>
   );
 }
 
@@ -86,7 +128,7 @@ function UserDetailPanel({ userId, onClose, router }) {
     <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/50 text-xs text-gray-400">Failed to load detail.</div>
   );
 
-  const { user, orders } = data;
+  const { user, orders, blockedIps = [], blockedDevices = [], userBlocked = false } = data;
 
   return (
     <motion.div
@@ -118,7 +160,7 @@ function UserDetailPanel({ userId, onClose, router }) {
                 <div key={i} className="bg-white rounded-lg border border-gray-100 p-2.5">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className="font-mono text-[11px] font-bold text-gray-800">{entry.ip}</span>
-                    <BlockBtn type="ip" value={entry.ip} label="Block IP" onBlocked={() => load()}/>
+                    <BlockControl type="ip" value={entry.ip} blocked={blockedIps.includes(entry.ip)} onDone={() => load()}/>
                   </div>
                   <div className="flex gap-3 text-[10px] text-gray-400">
                     <span>First: {fmt(entry.firstSeen)} {fmtTime(entry.firstSeen)}</span>
@@ -144,7 +186,7 @@ function UserDetailPanel({ userId, onClose, router }) {
                 <div key={i} className="bg-white rounded-lg border border-gray-100 p-2.5">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className="font-mono text-[10px] font-bold text-gray-700 truncate">{entry.deviceId}</span>
-                    <BlockBtn type="device" value={entry.deviceId} label="Block Device" onBlocked={() => load()}/>
+                    <BlockControl type="device" value={entry.deviceId} blocked={blockedDevices.includes(entry.deviceId)} onDone={() => load()}/>
                   </div>
                   <p className="text-[10px] text-gray-400 truncate mb-1">{entry.userAgent || 'Unknown UA'}</p>
                   <div className="flex gap-3 text-[10px] text-gray-400">
@@ -211,13 +253,18 @@ function UserDetailPanel({ userId, onClose, router }) {
 
       {/* Block user account */}
       <div className="px-5 pb-4 flex items-center gap-3 border-t border-gray-100 pt-3">
-        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">Block user account:</span>
-        <BlockBtn type="user" value={user._id} label="Block Account (30d)" onBlocked={() => router.refresh()}/>
-        <button
-          onClick={() => blockEntity({ type: 'user', value: user._id, reason: 'Admin permanent block', durationHours: null }).then(() => router.refresh())}
-          className="flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 transition-colors">
-          <Ban size={10}/> Permanent Ban
-        </button>
+        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">Account:</span>
+        <BlockControl
+          type="user"
+          value={user._id}
+          blocked={userBlocked}
+          onDone={() => { load(); router.refresh(); }}
+        />
+        {userBlocked && (
+          <span className="text-[10px] text-red-500 font-bold uppercase flex items-center gap-1">
+            <Ban size={10}/> Permanently Banned
+          </span>
+        )}
       </div>
     </motion.div>
   );

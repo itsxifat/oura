@@ -3,6 +3,7 @@
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import Order from '@/models/Order';
+import BlockList from '@/models/BlockList';
 import { encryptBuffer, decryptBuffer } from '@/lib/encryption';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -70,7 +71,19 @@ export async function toggleUserBan(id, currentStatus) {
   try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
   if (!isValidObjectId(id)) return { error: 'Invalid ID' };
   await connectDB();
-  await User.findByIdAndUpdate(id, { isBanned: !currentStatus });
+  if (currentStatus) {
+    // Unban: clear flag + remove BlockList entry so orders work again
+    await User.findByIdAndUpdate(id, { isBanned: false });
+    await BlockList.deleteOne({ type: 'user', value: String(id) });
+  } else {
+    // Ban: set flag + add permanent BlockList entry
+    await User.findByIdAndUpdate(id, { isBanned: true });
+    await BlockList.findOneAndUpdate(
+      { type: 'user', value: String(id) },
+      { $set: { reason: 'Admin ban', blockedBy: 'admin', expiresAt: null } },
+      { upsert: true }
+    );
+  }
   revalidatePath('/admin/users');
   return { success: true };
 }
@@ -112,7 +125,26 @@ export async function getUserDetail(userId) {
     .limit(20)
     .lean();
 
-  return JSON.parse(JSON.stringify({ user, orders }));
+  // Fetch which of this user's IPs / devices are currently blocked
+  const ipValues     = [...new Set([user.registrationIp, ...(user.knownIps?.map(e => e.ip) || [])].filter(Boolean))];
+  const deviceValues = (user.knownDevices?.map(e => e.deviceId) || []).filter(Boolean);
+  const now = new Date();
+  const activeBlocks = await BlockList.find({
+    $and: [
+      { $or: [
+        ...(ipValues.length     ? [{ type: 'ip',     value: { $in: ipValues } }]     : []),
+        ...(deviceValues.length ? [{ type: 'device', value: { $in: deviceValues } }] : []),
+        { type: 'user', value: String(userId) },
+      ]},
+      { $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
+    ],
+  }).lean();
+
+  const blockedIps     = activeBlocks.filter(b => b.type === 'ip').map(b => b.value);
+  const blockedDevices = activeBlocks.filter(b => b.type === 'device').map(b => b.value);
+  const userBlocked    = activeBlocks.some(b => b.type === 'user');
+
+  return JSON.parse(JSON.stringify({ user, orders, blockedIps, blockedDevices, userBlocked }));
 }
 
 // --- USER: UPDATE PROFILE (must use session — no email from formData) ---

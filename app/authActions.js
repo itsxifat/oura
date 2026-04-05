@@ -5,6 +5,8 @@ import User from "@/models/User";
 import bcrypt from "bcryptjs";
 import { sendOtpEmail } from "@/lib/email";
 import crypto from "crypto";
+import { getRequestMeta } from "@/lib/getRequestMeta";
+import { trackUserActivity } from "@/lib/trackUserActivity";
 
 export async function signupAction(formData) {
   const name = formData.get('name');
@@ -73,7 +75,17 @@ export async function verifyOtpAction(email, otp) {
   user.isVerified = true;
   user.otp = undefined;
   user.otpExpiry = undefined;
+
+  // Capture registration IP at the moment the account is activated
+  const { ip, userAgent } = await getRequestMeta();
+  if (ip && ip !== 'unknown' && !user.registrationIp) {
+    user.registrationIp = ip;
+  }
+
   await user.save();
+
+  // Record first known IP/device (fire-and-forget)
+  trackUserActivity(user._id, { ip, userAgent }).catch(() => {});
 
   return { success: true };
 }
