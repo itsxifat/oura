@@ -20,12 +20,29 @@ import { assertAdmin, assertSession, isValidObjectId, sanitizeString } from '@/l
 const serialize = (obj) => JSON.parse(JSON.stringify(obj));
 
 // Atomically increment and return the next invoice sequence for the given year.
-// Uses GlobalSetting as a counter store so concurrent requests never collide.
+// On first use, seeds the counter from the highest existing invoice number so
+// it never collides with orders created before this counter existed.
 async function nextInvoiceSeq(year) {
+  // Seed only if the counter doesn't exist yet ($setOnInsert is a no-op on update)
+  const last = await Order.findOne(
+    { invoiceNumber: { $regex: `^INV-${year}-` } },
+    { invoiceNumber: 1 }
+  ).sort({ invoiceNumber: -1 }).lean();
+
+  const maxSeq = last?.invoiceNumber
+    ? (parseInt(last.invoiceNumber.split('-')[2], 10) || 0)
+    : 0;
+
+  await GlobalSetting.findOneAndUpdate(
+    { identifier: `invoice_seq_${year}` },
+    { $setOnInsert: { value: maxSeq } },
+    { upsert: true }
+  );
+
   const doc = await GlobalSetting.findOneAndUpdate(
     { identifier: `invoice_seq_${year}` },
     { $inc: { value: 1 } },
-    { new: true, upsert: true }
+    { new: true }
   );
   return doc.value;
 }
