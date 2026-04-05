@@ -3,12 +3,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { getAdminOrders, updateOrderStatus } from '@/app/actions';
 import { checkFraud } from '@/actions/fraud';
-import { sendToSteadfast, bulkShipToSteadfast } from '@/actions/steadfast';
+import { sendToSteadfast, bulkShipToSteadfast, syncOrderCourierStatus } from '@/actions/steadfast';
+import DeliveryStatusModal from '@/components/DeliveryStatusModal';
 import {
   Package, Truck, Check, X, ChevronDown, ChevronUp,
   MapPin, User, CreditCard, ShoppingBag, ShieldAlert,
   Send, Loader2, AlertCircle, Banknote, CheckCircle2,
-  Clock, Hash, Phone, Calendar,
+  Clock, Hash, Phone, Calendar, Navigation,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -189,7 +190,7 @@ function ActionBtn({ onClick, icon, label, color = 'blue', loading: ld }) {
 }
 
 // ─── order card ───────────────────────────────────────────────────────────────
-function OrderCard({ order, expanded, onToggle, onStatusChange, onFraudCheck, onCancel, shippingId, onShip }) {
+function OrderCard({ order, expanded, onToggle, onStatusChange, onFraudCheck, onCancel, shippingId, onShip, onTrack }) {
   const pd = order.paymentDetails;
   const isPaid = order.paymentStatus === 'Paid';
   const shippingFee = order.shippingFee ?? (order.shippingAddress?.method === 'outside' ? 150 : 80);
@@ -438,6 +439,16 @@ function OrderCard({ order, expanded, onToggle, onStatusChange, onFraudCheck, on
                     <ActionBtn onClick={() => onStatusChange(order._id, 'Delivered')} icon={<Check size={13}/>} label="Mark Delivered" color="green"/>
                   )}
 
+                  {/* Track button — always visible for shipped/delivered or orders with consignment */}
+                  {(order.consignment_id || ['Shipped', 'Delivered'].includes(order.status)) && (
+                    <button
+                      onClick={() => onTrack(order)}
+                      className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-[#0a0a0a] text-white hover:bg-black border border-gray-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      <Navigation size={12}/> Track
+                    </button>
+                  )}
+
                   {!['Cancelled', 'Delivered'].includes(order.status) && (
                     <button
                       onClick={() => onCancel(order._id)}
@@ -459,16 +470,17 @@ function OrderCard({ order, expanded, onToggle, onStatusChange, onFraudCheck, on
 
 // ─── main page ────────────────────────────────────────────────────────────────
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [orders,        setOrders]        = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [search,        setSearch]        = useState('');
+  const [statusFilter,  setStatusFilter]  = useState('All');
   const [paymentFilter, setPaymentFilter] = useState('All');
-  const [expanded, setExpanded] = useState(null);
-  const [shippingId, setShippingId] = useState(null);
-  const [bulkShipping, setBulkShipping] = useState(false);
-  const [cancelId, setCancelId] = useState(null);
+  const [expanded,      setExpanded]      = useState(null);
+  const [shippingId,    setShippingId]    = useState(null);
+  const [bulkShipping,  setBulkShipping]  = useState(false);
+  const [cancelId,      setCancelId]      = useState(null);
   const [fraudCustomer, setFraudCustomer] = useState(null);
+  const [trackOrder,    setTrackOrder]    = useState(null);
 
   const load = async () => {
     const data = await getAdminOrders();
@@ -476,6 +488,18 @@ export default function AdminOrdersPage() {
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
+
+  // Auto-refresh shipped orders every 90 seconds
+  useEffect(() => {
+    const hasShipped = orders.some(o => o.status === 'Shipped' && o.consignment_id);
+    if (!hasShipped) return;
+    const interval = setInterval(async () => {
+      const shippedOrders = orders.filter(o => o.status === 'Shipped' && o.consignment_id);
+      await Promise.allSettled(shippedOrders.map(o => syncOrderCourierStatus(o._id)));
+      load();
+    }, 90000);
+    return () => clearInterval(interval);
+  }, [orders]);
 
   const handleShip = async (id) => {
     setShippingId(id);
@@ -536,6 +560,13 @@ export default function AdminOrdersPage() {
       <AnimatePresence>
         {cancelId && <CancelModal isOpen onClose={() => setCancelId(null)} onConfirm={(r) => { handleStatus(cancelId, 'Cancelled', r); setCancelId(null); }}/>}
         {fraudCustomer && <FraudCheckModal isOpen onClose={() => setFraudCustomer(null)} customer={fraudCustomer}/>}
+        {trackOrder && (
+          <DeliveryStatusModal
+            order={trackOrder}
+            onClose={() => setTrackOrder(null)}
+            onRefreshFromServer={load}
+          />
+        )}
       </AnimatePresence>
 
       <AdminPageHeader eyebrow="Order Management" title="Orders" count={filtered.length} countLabel="orders">
@@ -599,6 +630,7 @@ export default function AdminOrdersPage() {
                   onCancel={setCancelId}
                   shippingId={shippingId}
                   onShip={handleShip}
+                  onTrack={setTrackOrder}
                 />
               </motion.div>
             ))}

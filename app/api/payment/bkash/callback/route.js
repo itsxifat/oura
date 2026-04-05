@@ -5,9 +5,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/db';
-import Order from '@/models/Order';
-import Settings from '@/models/Settings';
+import { confirmPendingOrder } from '@/actions/orders';
 
 const BASE_URL = process.env.BKASH_BASE_URL || 'https://tokenized.sandbox.bka.sh/v1.2.0-beta';
 
@@ -31,8 +29,8 @@ async function getToken() {
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const paymentID = searchParams.get('paymentID');
-  const status = searchParams.get('status');
-  const siteUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  const status    = searchParams.get('status');
+  const siteUrl   = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
   if (status === 'cancel' || status === 'failure') {
     return NextResponse.redirect(`${siteUrl}/payment/fail?reason=${status}&gateway=bkash`);
@@ -43,8 +41,6 @@ export async function GET(request) {
   }
 
   try {
-    await connectDB();
-
     const tokenData = await getToken();
     if (!tokenData.id_token) {
       return NextResponse.redirect(`${siteUrl}/payment/fail?reason=token_error&gateway=bkash`);
@@ -68,34 +64,34 @@ export async function GET(request) {
       return NextResponse.redirect(`${siteUrl}/payment/fail?reason=execution_failed&gateway=bkash`);
     }
 
-    // Update order payment status + store full gateway details
-    const orderId = execData.merchantInvoiceNumber;
-    if (orderId) {
-      await Order.findOneAndUpdate(
-        { orderId },
-        {
-          paymentStatus: 'Paid',
-          paymentTransactionId: execData.trxID,
-          paymentDetails: {
-            gateway: 'bKash',
-            trxID: execData.trxID,
-            paymentID: execData.paymentID,
-            amount: execData.amount,
-            currency: execData.currency,
-            customerMsisdn: execData.customerMsisdn,
-            transactionStatus: execData.transactionStatus,
-            paymentExecuteTime: execData.paymentExecuteTime,
-            payerReference: execData.payerReference,
-            merchantInvoiceNumber: execData.merchantInvoiceNumber,
-          },
-        }
-      );
+    // pendingId was passed as merchantInvoiceNumber
+    const pendingId = execData.merchantInvoiceNumber;
+    if (!pendingId) {
+      return NextResponse.redirect(`${siteUrl}/payment/fail?reason=missing_id&gateway=bkash`);
     }
 
-    return NextResponse.redirect(`${siteUrl}/payment/success?orderId=${orderId}&gateway=bkash`);
+    const result = await confirmPendingOrder(pendingId, {
+      gateway: 'bKash',
+      paymentTransactionId: execData.trxID,
+      trxID: execData.trxID,
+      paymentID: execData.paymentID,
+      amount: execData.amount,
+      currency: execData.currency,
+      customerMsisdn: execData.customerMsisdn,
+      transactionStatus: execData.transactionStatus,
+      paymentExecuteTime: execData.paymentExecuteTime,
+      payerReference: execData.payerReference,
+      merchantInvoiceNumber: execData.merchantInvoiceNumber,
+    });
+
+    if (!result.success) {
+      console.error('bKash confirmPendingOrder failed:', result.error);
+      return NextResponse.redirect(`${siteUrl}/payment/fail?reason=order_error&gateway=bkash`);
+    }
+
+    return NextResponse.redirect(`${siteUrl}/payment/success?orderId=${encodeURIComponent(result.orderId)}&gateway=bkash`);
   } catch (error) {
     console.error('bKash callback error:', error);
-    const siteUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
     return NextResponse.redirect(`${siteUrl}/payment/fail?reason=server_error&gateway=bkash`);
   }
 }

@@ -3,6 +3,7 @@
 import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import Order from '@/models/Order';
+import PendingOrder from '@/models/PendingOrder';
 import Product from '@/models/Product';
 import Coupon from '@/models/Coupon';
 import Address from '@/models/Address';
@@ -351,6 +352,215 @@ export async function createOrder(orderData) {
     guestEmail: noSession ? (orderData.guestInfo?.email || null) : null,
     guestPhone: noSession ? (orderData.guestInfo?.phone || null) : null,
   };
+}
+
+// ─── ONLINE PAYMENT: INITIATE (saves PendingOrder, no real order yet) ────────
+export async function initiateOnlinePayment(orderData) {
+  await connectDB();
+
+  let userId = null;
+  let session;
+  try { session = await assertSession(); } catch { /* guest allowed */ }
+
+  if (session?.user) {
+    userId = session.user.id;
+    if (!userId && session.user.email) {
+      const user = await User.findOne({ email: session.user.email });
+      if (user) userId = user._id;
+    }
+  }
+
+  if (!userId) {
+    const guestFirst = sanitizeString(orderData.guestInfo?.firstName, 50);
+    const guestLast  = sanitizeString(orderData.guestInfo?.lastName || '', 50);
+    const guestEmail = sanitizeString(orderData.guestInfo?.email || '', 200).toLowerCase();
+    const guestPhone = sanitizeString(orderData.guestInfo?.phone || '', 30);
+
+    if (!guestFirst || !guestPhone) return { error: 'Name and phone are required.' };
+
+    let guestUser = null;
+    if (guestEmail) guestUser = await User.findOne({ email: guestEmail });
+    if (!guestUser && guestPhone) guestUser = await User.findOne({ phone: guestPhone, provider: 'guest' });
+
+    if (!guestUser) {
+      const emailForGuest = guestEmail || `guest_${guestPhone}@oura.guest`;
+      try {
+        guestUser = await User.create({
+          name: `${guestFirst} ${guestLast}`.trim(),
+          email: emailForGuest,
+          phone: guestPhone,
+          provider: 'guest',
+          role: 'user',
+          isVerified: false,
+        });
+      } catch (e) {
+        if (e.code === 11000 && guestEmail) {
+          guestUser = await User.findOne({ email: guestEmail });
+        } else {
+          return { error: 'Could not create guest account. Please try again.' };
+        }
+      }
+    }
+
+    userId = guestUser._id;
+  }
+
+  if (!orderData?.items?.length) return { error: 'Cart is empty' };
+
+  const calcResult = await calculateCart(orderData.items, orderData.couponCode);
+  if (!calcResult.validatedCart?.length) return { error: 'No valid items in cart.' };
+
+  for (const item of calcResult.validatedCart) {
+    const product = await Product.findById(item._id);
+    if (!product) return { error: `Product not found: ${item.name}` };
+    if (item.selectedSize && item.selectedSize !== 'STD' && item.selectedSize !== 'Standard') {
+      const variant = product.variants.find(v => v.size === item.selectedSize);
+      if (!variant) return { error: `Size '${item.selectedSize}' not valid for "${product.name}".` };
+      if (variant.stock < item.quantity) return { error: `SOLD OUT: Size ${item.selectedSize} of "${product.name}".` };
+    } else if (product.stock < item.quantity) {
+      return { error: `SOLD OUT: "${product.name}" is out of stock.` };
+    }
+  }
+
+  const deliverySettings = await Settings.findOne({ key: 'delivery_pricing' }).lean();
+  const insideCost  = deliverySettings?.value?.insideDhaka ?? 80;
+  const outsideCost = deliverySettings?.value?.outsideDhaka ?? 150;
+  const freeDelivery = deliverySettings?.value?.freeDelivery ?? false;
+  const shippingFee  = freeDelivery ? 0 : (orderData.shippingAddress?.method === 'outside' ? outsideCost : insideCost);
+
+  const pending = await PendingOrder.create({
+    userId,
+    guestInfo:       orderData.guestInfo,
+    shippingAddress: orderData.shippingAddress,
+    paymentMethod:   sanitizeString(orderData.paymentMethod || 'bKash', 30),
+    saveAddress:     !!orderData.saveAddress,
+    subTotal:        calcResult.cartTotal,
+    discountAmount:  calcResult.discountTotal || 0,
+    shippingFee,
+    couponCode:      calcResult.appliedCoupon?.code || null,
+    totalAmount:     calcResult.grandTotal + shippingFee,
+    items: calcResult.validatedCart.map(vi => ({
+      product:   vi._id,
+      name:      vi.name,
+      price:     vi.price,
+      basePrice: vi.basePrice ?? vi.price,
+      quantity:  vi.quantity,
+      size:      vi.selectedSize || vi.size,
+      image:     vi.image,
+      sku:       vi.sku || null,
+      barcode:   vi.barcode || null,
+    })),
+  });
+
+  return { success: true, pendingId: pending._id.toString() };
+}
+
+// ─── ONLINE PAYMENT: CONFIRM (called from payment callbacks after success) ────
+export async function confirmPendingOrder(pendingId, paymentDetails) {
+  await connectDB();
+
+  // Idempotency: if already confirmed, find and return existing order
+  const existingOrder = await Order.findOne({ 'paymentDetails.pendingId': pendingId }).lean();
+  if (existingOrder) {
+    // Already confirmed — ensure paymentStatus is Paid
+    if (existingOrder.paymentStatus !== 'Paid') {
+      await Order.findByIdAndUpdate(existingOrder._id, { paymentStatus: 'Paid', ...paymentDetails });
+    }
+    return { success: true, orderId: existingOrder.orderId };
+  }
+
+  const pending = await PendingOrder.findById(pendingId);
+  if (!pending) return { error: 'Pending order not found or expired.' };
+
+  // Re-validate stock before creating the real order
+  for (const item of pending.items) {
+    const product = await Product.findById(item.product);
+    if (!product) return { error: `Product not found: ${item.name}` };
+    if (item.size && item.size !== 'STD' && item.size !== 'Standard') {
+      const variant = product.variants.find(v => v.size === item.size);
+      if (!variant || variant.stock < item.quantity) {
+        return { error: `SOLD OUT: Size ${item.size} of "${item.name}".` };
+      }
+    } else if (product.stock < item.quantity) {
+      return { error: `SOLD OUT: "${item.name}" is out of stock.` };
+    }
+  }
+
+  const count = await Order.countDocuments();
+  const year  = new Date().getFullYear();
+  const seq   = String(count + 1).padStart(4, '0');
+
+  const newOrder = new Order({
+    user:            pending.userId,
+    orderId:         `#OL-${1000 + count + 1}`,
+    invoiceNumber:   `INV-${year}-${seq}`,
+    status:          'Pending',
+    shippingAddress: pending.shippingAddress,
+    guestInfo:       pending.guestInfo,
+    paymentMethod:   pending.paymentMethod,
+    subTotal:        pending.subTotal,
+    discountAmount:  pending.discountAmount,
+    shippingFee:     pending.shippingFee,
+    couponCode:      pending.couponCode,
+    totalAmount:     pending.totalAmount,
+    paymentStatus:   'Paid',
+    paymentTransactionId: paymentDetails?.paymentTransactionId || null,
+    paymentDetails:  { ...paymentDetails, pendingId },
+    items: pending.items.map(i => ({
+      product:   i.product,
+      name:      i.name,
+      price:     i.price,
+      basePrice: i.basePrice ?? i.price,
+      quantity:  i.quantity,
+      size:      i.size,
+      image:     i.image,
+      sku:       i.sku || null,
+      barcode:   i.barcode || null,
+    })),
+  });
+
+  await newOrder.save();
+
+  for (const item of pending.items) {
+    if (item.size && item.size !== 'STD' && item.size !== 'Standard') {
+      await Product.updateOne(
+        { _id: item.product, 'variants.size': item.size },
+        { $inc: { 'variants.$.stock': -item.quantity, stock: -item.quantity } }
+      );
+    } else {
+      await Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } });
+    }
+  }
+
+  if (pending.couponCode) {
+    await Coupon.findOneAndUpdate(
+      { code: pending.couponCode },
+      { $inc: { usedCount: 1 }, $push: { usedBy: { user: pending.userId, usedAt: new Date() } } }
+    );
+  }
+
+  if (pending.saveAddress && pending.userId) {
+    const gi = pending.guestInfo;
+    if (gi?.address && gi?.city) {
+      try {
+        await Address.create({
+          user:       pending.userId,
+          label:      'Home',
+          firstName:  sanitizeString(gi.firstName || '', 50),
+          lastName:   sanitizeString(gi.lastName  || '', 50),
+          phone:      sanitizeString(gi.phone     || '', 30),
+          address:    sanitizeString(gi.address,        300),
+          city:       sanitizeString(gi.city,           100),
+          postalCode: sanitizeString(gi.postalCode || '', 20),
+        });
+      } catch { /* non-fatal */ }
+    }
+  }
+
+  await PendingOrder.findByIdAndDelete(pendingId);
+  revalidatePath('/admin/orders');
+
+  return { success: true, orderId: newOrder.orderId };
 }
 
 // ─── ADMIN ORDER MANAGEMENT ───────────────────────────────────────────────────

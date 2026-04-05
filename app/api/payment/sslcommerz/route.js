@@ -31,9 +31,9 @@ export async function POST(request) {
   }
 
   try {
-    const { amount, orderId, customerName, customerEmail, customerPhone, customerAddress } = await request.json();
-    if (!amount || !orderId) {
-      return NextResponse.json({ error: 'amount and orderId are required.' }, { status: 400 });
+    const { amount, pendingId, customerName, customerEmail, customerPhone, customerAddress } = await request.json();
+    if (!amount || !pendingId) {
+      return NextResponse.json({ error: 'amount and pendingId are required.' }, { status: 400 });
     }
 
     const siteUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
@@ -43,7 +43,7 @@ export async function POST(request) {
       store_passwd: process.env.SSLCOMMERZ_STORE_PASSWD,
       total_amount: String(amount),
       currency: 'BDT',
-      tran_id: orderId,
+      tran_id: pendingId,
       success_url: `${siteUrl}/api/payment/sslcommerz/callback?status=success`,
       fail_url: `${siteUrl}/api/payment/sslcommerz/callback?status=fail`,
       cancel_url: `${siteUrl}/api/payment/sslcommerz/callback?status=cancel`,

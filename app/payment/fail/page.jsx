@@ -12,9 +12,10 @@ const REASON_LABELS = {
   missing_id:        { title: 'Payment ID Missing',      detail: 'We did not receive a payment reference from the gateway.' },
   execution_failed:  { title: 'Execution Failed',        detail: 'The payment could not be executed. Please try again.' },
   validation_failed: { title: 'Validation Failed',       detail: 'We could not verify your payment. Contact support if charged.' },
-  server_error:      { title: 'Server Error',            detail: 'An internal error occurred. Your order is saved safely.' },
+  server_error:      { title: 'Server Error',            detail: 'An internal error occurred. No order was placed — please try again.' },
   missing_params:    { title: 'Missing Parameters',      detail: 'Required payment data was missing. Please try again.' },
   fail:              { title: 'Payment Unsuccessful',    detail: 'The transaction was declined. No charge was made.' },
+  order_error:       { title: 'Order Creation Failed',   detail: 'Payment was received but the order could not be placed. Contact support immediately.' },
 };
 
 const GATEWAY_COLORS = {
@@ -127,7 +128,7 @@ function PaymentFailContent() {
                   <RefreshCw size={12} className="text-neutral-400" />
                 </div>
                 <p className="text-[12px] text-neutral-400 leading-relaxed">
-                  Your order has been saved. You can retry the payment or choose a different method.
+                  No order was placed. Your cart and details are saved — go back to try again.
                 </p>
               </div>
               <div className="flex items-start gap-3">

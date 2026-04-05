@@ -5,12 +5,21 @@ import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Check, ShoppingBag, ArrowRight, Clock } from 'lucide-react';
+import { useCart } from '@/lib/context/CartContext';
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
   const gateway = searchParams.get('gateway');
   const [count, setCount] = useState(10);
+  const { clearCart } = useCart();
+
+  useEffect(() => {
+    // Clear cart and saved checkout form on successful payment
+    clearCart();
+    try { localStorage.removeItem('oura_checkout_form'); } catch { /* non-fatal */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (count <= 0) return;

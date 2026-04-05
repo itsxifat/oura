@@ -3,7 +3,9 @@
 import { useCart } from '@/lib/context/CartContext';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { createOrder, saveAddress } from '@/app/actions';
+import { createOrder, initiateOnlinePayment, saveAddress } from '@/app/actions';
+
+const CHECKOUT_STORAGE_KEY = 'oura_checkout_form';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -314,6 +316,7 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
 
   /* ── shipping + payment ── */
   const [shippingMethod, setShippingMethod] = useState('inside');
+  const [_lsLoaded, setLsLoaded] = useState(false);
 
   const enabledPM = [
     pmCfg.cashOnDelivery && { id: 'COD',       label: 'Cash on Delivery', sub: 'Pay when your order arrives', badge: <CODBadge /> },
@@ -330,6 +333,34 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
 
   // Track which contact fields were auto-filled so we can highlight them
   const [autoFilledFields, setAutoFilledFields] = useState([]);
+
+  /* ── restore checkout form from localStorage on mount ── */
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CHECKOUT_STORAGE_KEY);
+      if (!saved) return;
+      const { form: savedForm, shippingMethod: savedShipping, paymentMethod: savedPayment,
+              useSaved: savedUseSaved, selectedAddrId: savedAddrId, saveForLater: savedSaveForLater } = JSON.parse(saved);
+      if (savedForm)       setForm(prev => ({ ...prev, ...savedForm }));
+      if (savedShipping)   setShippingMethod(savedShipping);
+      if (savedPayment)    setPaymentMethod(savedPayment);
+      if (savedUseSaved !== undefined && savedAddresses.length > 0) setUseSaved(savedUseSaved);
+      if (savedAddrId)     setSelectedAddrId(savedAddrId);
+      if (savedSaveForLater !== undefined) setSaveForLater(savedSaveForLater);
+    } catch { /* non-fatal */ }
+    setLsLoaded(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── persist checkout form to localStorage whenever it changes ── */
+  useEffect(() => {
+    if (!_lsLoaded) return;
+    try {
+      localStorage.setItem(CHECKOUT_STORAGE_KEY, JSON.stringify({
+        form, shippingMethod, paymentMethod, useSaved, selectedAddrId, saveForLater,
+      }));
+    } catch { /* non-fatal */ }
+  }, [form, shippingMethod, paymentMethod, useSaved, selectedAddrId, saveForLater, _lsLoaded]);
 
   /* ── auto-fill from session (contact info always, address from first saved if switching to new) ── */
   useEffect(() => {
@@ -394,15 +425,15 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
       data = { ...form };
     }
 
-    const res = await createOrder({
+    const orderPayload = {
       guestInfo: {
-        firstName: data.firstName      || '',
-        lastName:  data.lastName       || '',
-        email:     data.email          || '',
-        phone:     data.phone          || '',
-        address:   data.address        || '',
-        city:      data.city           || '',
-        postalCode: data.postalCode    || '',
+        firstName:  data.firstName   || '',
+        lastName:   data.lastName    || '',
+        email:      data.email       || '',
+        phone:      data.phone       || '',
+        address:    data.address     || '',
+        city:       data.city        || '',
+        postalCode: data.postalCode  || '',
       },
       items: cart.map(item => {
         const p = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
@@ -416,11 +447,71 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
         address: data.address || '', city: data.city || '',
         postalCode: data.postalCode || '', method: shippingMethod,
       },
-      couponCode:    appliedCoupon?.code || null,
-      totalAmount:   total,
+      couponCode:  appliedCoupon?.code || null,
+      totalAmount: total,
       paymentMethod,
-      saveAddress:   !useSaved && saveForLater,
-    });
+      saveAddress: !useSaved && saveForLater,
+    };
+
+    // ── Online payment (bKash / SSLCommerz): save PendingOrder, redirect to gateway ──
+    if (paymentMethod === 'bKash' || paymentMethod === 'SSLCommerz') {
+      const res = await initiateOnlinePayment(orderPayload);
+
+      if (!res.success) {
+        setErrorMsg(res.error || 'Something went wrong. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      setRedirectGateway(paymentMethod);
+      setIsRedirecting(true);
+
+      try {
+        if (paymentMethod === 'bKash') {
+          const bkashRes  = await fetch('/api/payment/bkash', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: total, pendingId: res.pendingId }),
+          });
+          const bkashData = await bkashRes.json();
+          if (bkashData.bkashURL) {
+            window.location.href = bkashData.bkashURL;
+            return;
+          }
+          setIsRedirecting(false);
+          setErrorMsg(bkashData.error || 'bKash payment initiation failed. Please try again.');
+        } else {
+          const sslRes  = await fetch('/api/payment/sslcommerz', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amount: total,
+              pendingId: res.pendingId,
+              customerName:    `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+              customerEmail:   data.email    || '',
+              customerPhone:   data.phone    || '',
+              customerAddress: data.address  || '',
+            }),
+          });
+          const sslData = await sslRes.json();
+          if (sslData.redirectURL) {
+            window.location.href = sslData.redirectURL;
+            return;
+          }
+          setIsRedirecting(false);
+          setErrorMsg(sslData.error || 'SSL Commerz payment initiation failed. Please try again.');
+        }
+      } catch {
+        setIsRedirecting(false);
+        setErrorMsg('Payment initiation failed. Please try again.');
+      }
+
+      setLoading(false);
+      return;
+    }
+
+    // ── COD: create order immediately ──
+    const res = await createOrder(orderPayload);
 
     if (!res.success) {
       setErrorMsg(res.error || 'Something went wrong. Please try again.');
@@ -429,72 +520,8 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
     }
 
     clearCart();
+    try { localStorage.removeItem(CHECKOUT_STORAGE_KEY); } catch { /* non-fatal */ }
 
-    // ── Online payment: show gateway overlay then redirect ──
-    if (paymentMethod === 'bKash') {
-      setRedirectGateway('bKash');
-      setIsRedirecting(true);
-      try {
-        const bkashRes = await fetch('/api/payment/bkash', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            amount: total,
-            orderId: res.orderId,
-            callbackURL: `${window.location.origin}/api/payment/bkash/callback`,
-          }),
-        });
-        const bkashData = await bkashRes.json();
-        if (bkashData.bkashURL) {
-          window.location.href = bkashData.bkashURL;
-          return;
-        }
-        setIsRedirecting(false);
-        setErrorMsg(bkashData.error || 'bKash payment initiation failed. Please try again.');
-        setLoading(false);
-        return;
-      } catch {
-        setIsRedirecting(false);
-        setErrorMsg('bKash payment initiation failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-    }
-
-    if (paymentMethod === 'SSLCommerz') {
-      setRedirectGateway('SSLCommerz');
-      setIsRedirecting(true);
-      try {
-        const sslRes = await fetch('/api/payment/sslcommerz', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            amount: total,
-            orderId: res.orderId,
-            customerName: `${data.firstName || ''} ${data.lastName || ''}`.trim(),
-            customerEmail: data.email || '',
-            customerPhone: data.phone || '',
-            customerAddress: data.address || '',
-          }),
-        });
-        const sslData = await sslRes.json();
-        if (sslData.redirectURL) {
-          window.location.href = sslData.redirectURL;
-          return;
-        }
-        setIsRedirecting(false);
-        setErrorMsg(sslData.error || 'SSL Commerz payment initiation failed. Please try again.');
-        setLoading(false);
-        return;
-      } catch {
-        setIsRedirecting(false);
-        setErrorMsg('SSL Commerz payment initiation failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-    }
-
-    // ── COD: show confirmation overlay ──
     if (res.isGuest) {
       setGuestDone({ email: res.guestEmail, phone: res.guestPhone });
       setIsGuestSuccess(true);

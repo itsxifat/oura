@@ -3,19 +3,32 @@ import Order from '@/models/Order';
 import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { revalidatePath } from 'next/cache';
 
 const WEBHOOK_SECRET = process.env.STEADFAST_WEBHOOK_SECRET;
 
-// Constant-time comparison to prevent timing attacks
 function safeCompare(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
+// Maps Steadfast delivery_status → our Order.status
+const STATUS_MAP = {
+  delivered:          'Delivered',
+  partial_delivered:  'Delivered',
+  cancelled:          'Cancelled',
+  in_review:          'Shipped',
+  pending:            'Shipped',
+  in_transit:         'Shipped',
+  out_for_delivery:   'Shipped',
+  hold:               'Shipped',
+  pending_return:     'Cancelled',
+};
+
 export async function POST(req) {
   if (!WEBHOOK_SECRET) {
-    console.error('STEADFAST_WEBHOOK_SECRET is not configured');
+    console.error('[Steadfast Webhook] STEADFAST_WEBHOOK_SECRET not configured');
     return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
   }
 
@@ -34,31 +47,50 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    // Whitelist allowed courier statuses
-    const STATUS_MAP = {
-      delivered: 'Delivered',
-      cancelled: 'Cancelled',
-      partial_delivered: 'Delivered',
-      in_review: 'Shipped',
-      pending: 'Shipped',
-    };
-
-    const newStatus = STATUS_MAP[status.toLowerCase()];
+    const courierStatus = status.toLowerCase();
+    const newStatus = STATUS_MAP[courierStatus];
     if (!newStatus) {
+      console.warn(`[Steadfast Webhook] Unknown status: ${status}`);
       return NextResponse.json({ error: 'Unknown status' }, { status: 400 });
     }
 
     await connectDB();
 
-    await Order.findOneAndUpdate(
-      { orderId: invoice },
-      { courier_status: status, status: newStatus },
+    // Try multiple lookup strategies:
+    // 1. By steadfast_invoice (clean ID we stored when shipping)
+    // 2. By orderId exact match
+    // 3. By orderId with # prefix (e.g. invoice="OL-1001" → orderId="#OL-1001")
+    const cleanInvoice = invoice.replace(/[^a-zA-Z0-9-_]/g, '');
+    const updated = await Order.findOneAndUpdate(
+      {
+        $or: [
+          { steadfast_invoice: invoice },
+          { steadfast_invoice: cleanInvoice },
+          { orderId: invoice },
+          { orderId: `#${cleanInvoice}` },
+          { orderId: cleanInvoice },
+        ],
+      },
+      {
+        courier_status: courierStatus,
+        status: newStatus,
+        courier_synced_at: new Date(),
+      },
       { new: true }
     );
 
+    if (!updated) {
+      console.error(`[Steadfast Webhook] Order not found for invoice: ${invoice}`);
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    revalidatePath('/admin/orders');
+    revalidatePath('/account/orders');
+    revalidatePath('/delivery-status');
+
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Webhook error:', error.message);
-    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    console.error('[Steadfast Webhook] Error:', error.message);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

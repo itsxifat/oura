@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo } from 'react';
 // ✅ IMPORT EVERYTHING FROM ONE PLACE
 import { getUserOrders, submitReview, getOrderReview } from '@/app/actions';
-import { CheckCircle, XCircle, Clock, ShoppingBag, Loader2, MapPin, Receipt, Ticket, Zap, ScanLine, Star, PenLine, Send, X, AlertCircle, Search, Filter, ChevronDown, ArrowRight, CreditCard, Banknote, CheckCircle2, AlertTriangle, Hash, Phone, Calendar } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, ShoppingBag, Loader2, MapPin, Receipt, Ticket, Zap, ScanLine, Star, PenLine, Send, X, AlertCircle, Search, Filter, ChevronDown, ArrowRight, CreditCard, Banknote, CheckCircle2, AlertTriangle, Hash, Phone, Calendar, Navigation, Truck } from 'lucide-react';
+import DeliveryStatusModal from './DeliveryStatusModal';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -187,6 +188,7 @@ export default function OrdersClient() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewProduct, setReviewProduct] = useState(null);
   const [reviewOrderId, setReviewOrderId] = useState(null);
+  const [trackOrder, setTrackOrder] = useState(null);
 
   const fetchOrders = async () => {
     if(orders.length === 0) setLoading(true);
@@ -246,6 +248,16 @@ export default function OrdersClient() {
 
       <AnimatePresence>
         {selectedInvoiceOrder && <InvoiceModal order={selectedInvoiceOrder} onClose={() => setSelectedInvoiceOrder(null)} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {trackOrder && (
+          <DeliveryStatusModal
+            order={trackOrder}
+            onClose={() => setTrackOrder(null)}
+            onRefreshFromServer={fetchOrders}
+          />
+        )}
       </AnimatePresence>
 
       {reviewModalOpen && (
@@ -376,13 +388,24 @@ export default function OrdersClient() {
                           </div>
                       </div>
                       
-                      <div className={`inline-flex items-center gap-2 px-3 py-1 text-[9px] font-black uppercase tracking-widest border 
-                        ${order.status === 'Delivered' ? 'bg-black text-white border-black' : 
-                          order.status === 'Cancelled' ? 'bg-red-50 text-[#B91C1C] border-red-100' : 
-                          'bg-white text-black border-neutral-300'
-                        }`}>
-                        {order.status === 'Delivered' ? <CheckCircle size={10}/> : order.status === 'Cancelled' ? <XCircle size={10}/> : <Clock size={10}/>}
-                        {order.status}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className={`inline-flex items-center gap-2 px-3 py-1 text-[9px] font-black uppercase tracking-widest border
+                          ${order.status === 'Delivered' ? 'bg-black text-white border-black' :
+                            order.status === 'Cancelled' ? 'bg-red-50 text-[#B91C1C] border-red-100' :
+                            'bg-white text-black border-neutral-300'
+                          }`}>
+                          {order.status === 'Delivered' ? <CheckCircle size={10}/> : order.status === 'Cancelled' ? <XCircle size={10}/> : <Clock size={10}/>}
+                          {order.status}
+                        </div>
+                        {/* Track button — shown for all non-cancelled orders */}
+                        {order.status !== 'Cancelled' && (
+                          <button
+                            onClick={() => setTrackOrder(order)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 text-[9px] font-black uppercase tracking-widest border border-[#B91C1C]/30 bg-[#B91C1C]/5 text-[#B91C1C] hover:bg-[#B91C1C] hover:text-white hover:border-[#B91C1C] transition-all"
+                          >
+                            <Navigation size={9}/> Track
+                          </button>
+                        )}
                       </div>
                   </div>
 

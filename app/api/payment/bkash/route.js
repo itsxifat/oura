@@ -48,9 +48,9 @@ export async function POST(request) {
   }
 
   try {
-    const { amount, orderId, callbackURL } = await request.json();
-    if (!amount || !orderId) {
-      return NextResponse.json({ error: 'amount and orderId are required.' }, { status: 400 });
+    const { amount, pendingId } = await request.json();
+    if (!amount || !pendingId) {
+      return NextResponse.json({ error: 'amount and pendingId are required.' }, { status: 400 });
     }
 
     const tokenData = await getToken();
@@ -68,12 +68,12 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         mode: '0011',
-        payerReference: orderId,
-        callbackURL: callbackURL || `${process.env.NEXTAUTH_URL}/api/payment/bkash/callback`,
+        payerReference: pendingId,
+        callbackURL: `${process.env.NEXTAUTH_URL}/api/payment/bkash/callback`,
         amount: String(amount),
         currency: 'BDT',
         intent: 'sale',
-        merchantInvoiceNumber: orderId,
+        merchantInvoiceNumber: pendingId,
       }),
     });
 

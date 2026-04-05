@@ -18,10 +18,8 @@ export default async function OrdersPage() {
   };
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="bg-[#0a0a0a] min-h-screen">
       <Navbar navData={navData} />
-      
-      {/* Client Component for Interactive Status */}
       <main>
         <DeliveryClient />
       </main>
