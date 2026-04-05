@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { confirmPendingOrder } from '@/actions/orders';
+import { confirmPendingOrder, releasePendingOrderStock } from '@/actions/orders';
 
 const BASE_URL = process.env.BKASH_BASE_URL || 'https://tokenized.sandbox.bka.sh/v1.2.0-beta';
 
@@ -33,6 +33,31 @@ export async function GET(request) {
   const siteUrl   = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
   if (status === 'cancel' || status === 'failure') {
+    // Best-effort: query bKash to recover pendingId and release reserved stock
+    if (paymentID) {
+      try {
+        const tokenData = await getToken();
+        if (tokenData.id_token) {
+          const queryRes = await fetch(`${BASE_URL}/tokenized/checkout/payment/status`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              Authorization: tokenData.id_token,
+              'X-APP-Key': process.env.BKASH_APP_KEY,
+            },
+            body: JSON.stringify({ paymentID }),
+          });
+          const queryData = await queryRes.json();
+          if (queryData.merchantInvoiceNumber) {
+            await releasePendingOrderStock(
+              queryData.merchantInvoiceNumber,
+              status === 'cancel' ? 'payment_cancel' : 'payment_fail'
+            );
+          }
+        }
+      } catch {}
+    }
     return NextResponse.redirect(`${siteUrl}/payment/fail?reason=${status}&gateway=bkash`);
   }
 
@@ -61,6 +86,10 @@ export async function GET(request) {
     const execData = await execRes.json();
 
     if (execData.statusCode !== '0000') {
+      const failedPendingId = execData.merchantInvoiceNumber;
+      if (failedPendingId) {
+        try { await releasePendingOrderStock(failedPendingId); } catch {}
+      }
       return NextResponse.redirect(`${siteUrl}/payment/fail?reason=execution_failed&gateway=bkash`);
     }
 
@@ -86,6 +115,7 @@ export async function GET(request) {
 
     if (!result.success) {
       console.error('bKash confirmPendingOrder failed:', result.error);
+      try { await releasePendingOrderStock(pendingId); } catch {}
       return NextResponse.redirect(`${siteUrl}/payment/fail?reason=order_error&gateway=bkash`);
     }
 

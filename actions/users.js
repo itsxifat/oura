@@ -2,6 +2,7 @@
 
 import connectDB from '@/lib/db';
 import User from '@/models/User';
+import Order from '@/models/Order';
 import { encryptBuffer, decryptBuffer } from '@/lib/encryption';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -53,7 +54,7 @@ export async function getUsers(query = '') {
       }
 
       // Never return the password hash or sensitive OTP fields
-      const { password, emailChangeOTP, emailChangeOTPExpires, pendingNewEmail, profilePicture, ...safeUser } = user;
+      const { password, otp, otpExpiry, emailChangeOTP, emailChangeOTPExpires, pendingNewEmail, profilePicture, ...safeUser } = user;
       return { ...safeUser, _id: user._id.toString(), image: displayImage };
     });
 
@@ -93,6 +94,25 @@ export async function deleteUser(id) {
   await User.findByIdAndDelete(id);
   revalidatePath('/admin/users');
   return { success: true };
+}
+
+// --- ADMIN: GET SINGLE USER WITH ORDERS (for detail panel) ---
+export async function getUserDetail(userId) {
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
+  if (!isValidObjectId(userId)) return { error: 'Invalid ID' };
+  await connectDB();
+  const user = await User.findById(userId)
+    .select('-password -otp -otpExpiry -emailChangeOTP -emailChangeOTPExpires -pendingNewEmail -profilePicture -resetPasswordToken -resetPasswordExpires')
+    .lean();
+  if (!user) return { error: 'User not found' };
+
+  const orders = await Order.find({ user: userId })
+    .select('orderId invoiceNumber totalAmount status paymentMethod paymentStatus clientIp deviceId userAgent createdAt items')
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .lean();
+
+  return JSON.parse(JSON.stringify({ user, orders }));
 }
 
 // --- USER: UPDATE PROFILE (must use session — no email from formData) ---

@@ -6,7 +6,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { confirmPendingOrder } from '@/actions/orders';
+import { confirmPendingOrder, releasePendingOrderStock } from '@/actions/orders';
 
 const IS_LIVE  = process.env.SSLCOMMERZ_IS_LIVE === 'true';
 const BASE_URL = IS_LIVE
@@ -19,6 +19,11 @@ export async function POST(request) {
   const status = searchParams.get('status');
 
   if (status === 'fail' || status === 'cancel') {
+    try {
+      const formData  = await request.formData();
+      const pendingId = formData.get('tran_id');
+      if (pendingId) await releasePendingOrderStock(pendingId, status === 'cancel' ? 'payment_cancel' : 'payment_fail');
+    } catch {}
     return NextResponse.redirect(`${siteUrl}/payment/fail?reason=${status}&gateway=sslcommerz`);
   }
 
@@ -59,6 +64,7 @@ export async function POST(request) {
 
     if (!result.success) {
       console.error('SSLCommerz confirmPendingOrder failed:', result.error);
+      try { await releasePendingOrderStock(pendingId); } catch {}
       return NextResponse.redirect(`${siteUrl}/payment/fail?reason=order_error&gateway=sslcommerz`);
     }
 

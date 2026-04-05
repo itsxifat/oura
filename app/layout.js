@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar';
 import { CartProvider } from '@/lib/context/CartContext';
 import SessionProvider from '@/components/SessionProvider';
 import FooterWrapper from '@/components/FooterWrapper';
+import VisitTracker from '@/components/VisitTracker';
 import { Toaster } from 'react-hot-toast'; // ✅ Import the Toaster
 
 export const metadata = {
@@ -84,6 +85,7 @@ export default function RootLayout({ children }) {
         <SessionProvider>
           <CartProvider>
             <Toaster position="top-right" reverseOrder={false} />
+            <VisitTracker />
             <main>
               {children}
             </main>

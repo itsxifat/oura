@@ -22,6 +22,23 @@ const UserSchema = new mongoose.Schema({
   otpExpiry: { type: Date },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   isBanned: { type: Boolean, default: false },
+
+  // ── Device & network fingerprint history ─────────────────────────────────
+  // Populated on account creation, every purchase, and site visits (24h dedup).
+  registrationIp:       { type: String, default: null },
+  registrationDeviceId: { type: String, default: null },
+  knownIps: [{
+    ip:        { type: String },
+    firstSeen: { type: Date, default: Date.now },
+    lastSeen:  { type: Date, default: Date.now },
+  }],
+  knownDevices: [{
+    deviceId:  { type: String },
+    userAgent: { type: String, default: '' },
+    firstSeen: { type: Date, default: Date.now },
+    lastSeen:  { type: Date, default: Date.now },
+  }],
+
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
   emailChangeOTP: { type: String },

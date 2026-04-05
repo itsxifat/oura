@@ -352,6 +352,36 @@ function OrderCard({ order, expanded, onToggle, onStatusChange, onFraudCheck, on
                     )}
                   </div>
                 </div>
+
+                {/* Network / Device info */}
+                {(order.clientIp || order.deviceId) && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Navigation size={14} className="text-[#800000]"/>
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-700">Network &amp; Device</h4>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      {order.clientIp && (
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">IP Address</p>
+                          <p className="font-mono text-[11px] text-gray-800">{order.clientIp}</p>
+                        </div>
+                      )}
+                      {order.deviceId && (
+                        <div className="pt-1 border-t border-gray-100">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Device ID</p>
+                          <p className="font-mono text-[10px] text-gray-700 break-all">{order.deviceId}</p>
+                        </div>
+                      )}
+                      {order.userAgent && (
+                        <div className="pt-1 border-t border-gray-100">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">User Agent</p>
+                          <p className="text-[10px] text-gray-500 break-all leading-relaxed">{order.userAgent}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* RIGHT col (2/3) */}

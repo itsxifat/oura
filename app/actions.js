@@ -7,3 +7,4 @@ export * from '../actions/filter';
 export * from '../actions/cart';
 export * from '../actions/reviews';
 export * from '../actions/settings';
+export * from '../actions/security';

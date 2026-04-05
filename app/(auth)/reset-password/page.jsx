@@ -29,13 +29,16 @@ function ResetForm() {
     setStatus({ type: '', message: '' });
     
     const res = await resetPassword(token, newPass);
-    
+
     setLoading(false);
     if (res.error) {
       setStatus({ type: 'error', message: res.error });
     } else {
-      setStatus({ type: 'success', message: 'Password updated. Redirecting...' });
-      setTimeout(() => router.push('/login'), 2000);
+      const msg = res.wasGuest
+        ? 'Account activated! You can now log in with your email and new password.'
+        : 'Password updated. Redirecting to login...';
+      setStatus({ type: 'success', message: msg });
+      setTimeout(() => router.push('/login'), 2500);
     }
   };
 

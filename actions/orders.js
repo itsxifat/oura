@@ -10,20 +10,111 @@ import Address from '@/models/Address';
 import User from '@/models/User';
 import Settings from '@/models/Settings';
 import GlobalSetting from '@/models/GlobalSetting';
+import OrderAttempt from '@/models/OrderAttempt';
 import Tag from '@/models/Tag';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { calculateCart } from './cart';
 import { assertAdmin, assertSession, isValidObjectId, sanitizeString } from '@/lib/security';
+import { getRequestMeta } from '@/lib/getRequestMeta';
+import { isBlocked, trackAttempt } from '@/actions/security';
+import { trackUserActivity } from '@/lib/trackUserActivity';
 
 const serialize = (obj) => JSON.parse(JSON.stringify(obj));
 
-// Atomically increment and return the next invoice sequence for the given year.
-// On first use, seeds the counter from the highest existing invoice number so
-// it never collides with orders created before this counter existed.
+// ─── ORDER PROTECTION: block + rate-limit check ───────────────────────────────
+// Returns an error string if the request should be rejected, null if OK.
+async function checkOrderProtection(ip, deviceId, userId) {
+  // 1. Block list check
+  if (await isBlocked(ip, deviceId, userId)) {
+    return 'Your account or device has been restricted due to suspicious activity. Please contact support.';
+  }
+
+  // 2. Rate limit: max 10 order/pending-order attempts per IP in 1 hour
+  const window1h = new Date(Date.now() - 60 * 60 * 1000);
+  const recentCount = await OrderAttempt.countDocuments({
+    ip,
+    type: { $in: ['order_created', 'pending_created', 'stock_fail'] },
+    createdAt: { $gte: window1h },
+  });
+  if (recentCount >= 10) {
+    return 'Too many order attempts from your network. Please try again in an hour.';
+  }
+
+  // 3. Device rate limit: max 5 per device per hour (catches multi-account from same browser)
+  if (deviceId) {
+    const deviceCount = await OrderAttempt.countDocuments({
+      deviceId,
+      type: { $in: ['order_created', 'pending_created', 'stock_fail'] },
+      createdAt: { $gte: window1h },
+    });
+    if (deviceCount >= 5) {
+      return 'Too many order attempts from this device. Please try again in an hour.';
+    }
+  }
+
+  return null;
+}
+
+// ─── STOCK RESERVATION HELPERS ───────────────────────────────────────────────
+
+// Atomically decrements stock for each item. If any item is out of stock,
+// rolls back all previous decrements and returns an error.
+// items must have: { _id (productId), name, size/selectedSize, quantity }
+async function reserveStock(items) {
+  const reserved = [];
+  for (const item of items) {
+    const qty  = item.quantity;
+    const size = item.selectedSize || item.size;
+    const hasSize = size && size !== 'STD' && size !== 'Standard';
+    let updated;
+    if (hasSize) {
+      updated = await Product.findOneAndUpdate(
+        { _id: item._id, variants: { $elemMatch: { size, stock: { $gte: qty } } } },
+        { $inc: { 'variants.$.stock': -qty, stock: -qty } }
+      );
+    } else {
+      updated = await Product.findOneAndUpdate(
+        { _id: item._id, stock: { $gte: qty } },
+        { $inc: { stock: -qty } }
+      );
+    }
+    if (!updated) {
+      await releaseStockItems(reserved);
+      const label = hasSize ? `Size ${size} of "${item.name}"` : `"${item.name}"`;
+      return { error: `${label} just sold out. Please update your cart.` };
+    }
+    reserved.push({ _id: item._id, name: item.name, size, quantity: qty, hasSize });
+  }
+  return { success: true };
+}
+
+// Releases (restores) stock — used for rollback and abandoned-payment cleanup.
+// items must have: { _id or product (productId), size, quantity, hasSize? }
+async function releaseStockItems(items) {
+  for (const item of items) {
+    const productId = item._id || item.product;
+    const qty  = item.quantity;
+    const size = item.size;
+    const hasSize = item.hasSize ?? (size && size !== 'STD' && size !== 'Standard');
+    if (hasSize) {
+      await Product.updateOne(
+        { _id: productId, 'variants.size': size },
+        { $inc: { 'variants.$.stock': qty, stock: qty } }
+      );
+    } else {
+      await Product.findByIdAndUpdate(productId, { $inc: { stock: qty } });
+    }
+  }
+}
+
+// ─── INVOICE COUNTER ─────────────────────────────────────────────────────────
+
+// Atomically returns the next invoice sequence for the given year.
+// Uses a pipeline update (MongoDB 4.2+) to do max(counter, dbMax)+1 in one
+// atomic operation — safe against concurrent requests AND a stale counter.
 async function nextInvoiceSeq(year) {
-  // Seed only if the counter doesn't exist yet ($setOnInsert is a no-op on update)
   const last = await Order.findOne(
     { invoiceNumber: { $regex: `^INV-${year}-` } },
     { invoiceNumber: 1 }
@@ -33,17 +124,14 @@ async function nextInvoiceSeq(year) {
     ? (parseInt(last.invoiceNumber.split('-')[2], 10) || 0)
     : 0;
 
-  await GlobalSetting.findOneAndUpdate(
-    { identifier: `invoice_seq_${year}` },
-    { $setOnInsert: { value: maxSeq } },
-    { upsert: true }
-  );
-
+  // Single atomic op: value = max(current_value, maxSeq) + 1
+  // $ifNull handles the case where the document is being upserted (value doesn't exist yet)
   const doc = await GlobalSetting.findOneAndUpdate(
     { identifier: `invoice_seq_${year}` },
-    { $inc: { value: 1 } },
-    { new: true }
+    [{ $set: { value: { $add: [{ $max: [{ $ifNull: ['$value', 0] }, maxSeq] }, 1] } } }],
+    { new: true, upsert: true }
   );
+
   return doc.value;
 }
 
@@ -214,6 +302,10 @@ export async function getUserOrders() {
 export async function createOrder(orderData) {
   await connectDB();
 
+  // ── Protection: extract request identity, check blocks + rate limits ──
+  const { ip, userAgent } = await getRequestMeta();
+  const deviceId = sanitizeString(orderData.deviceId || '', 64);
+
   // Session is optional — guest checkout allowed
   let userId = null;
   let isGuest = false;
@@ -255,6 +347,9 @@ export async function createOrder(orderData) {
           provider: 'guest',
           role: 'user',
           isVerified: false,
+          // Capture network identity at account creation time
+          registrationIp:       ip || null,
+          registrationDeviceId: deviceId || null,
         });
       } catch (e) {
         // Email already exists (non-guest account) — link to that account
@@ -270,23 +365,23 @@ export async function createOrder(orderData) {
     userId = guestUser._id;
   }
 
+  // ── Block + rate-limit check (after userId is resolved) ──
+  const protectErr = await checkOrderProtection(ip, deviceId, userId);
+  if (protectErr) return { error: protectErr };
+
   if (!orderData?.items?.length) return { error: 'Cart is empty' };
 
   const calcResult = await calculateCart(orderData.items, orderData.couponCode);
 
   if (!calcResult.validatedCart?.length) return { error: 'No valid items in cart.' };
 
-  for (const item of calcResult.validatedCart) {
-    const product = await Product.findById(item._id);
-    if (!product) return { error: `Product not found: ${item.name}` };
-
-    if (item.selectedSize && item.selectedSize !== 'STD' && item.selectedSize !== 'Standard') {
-      const variant = product.variants.find(v => v.size === item.selectedSize);
-      if (!variant) return { error: `Size '${item.selectedSize}' not valid for "${product.name}".` };
-      if (variant.stock < item.quantity) return { error: `SOLD OUT: Size ${item.selectedSize} of "${product.name}".` };
-    } else if (product.stock < item.quantity) {
-      return { error: `SOLD OUT: "${product.name}" is out of stock.` };
-    }
+  // ── Atomic stock reservation — serialized per product by MongoDB document lock ──
+  // If stock is insufficient, releaseStock rolls back any partial reservations.
+  const stockResult = await reserveStock(calcResult.validatedCart);
+  if (stockResult.error) {
+    await trackAttempt({ ip, deviceId, userId, userAgent, type: 'stock_fail',
+      productIds: calcResult.validatedCart.map(i => String(i._id)) });
+    return { error: stockResult.error };
   }
 
   // Load delivery pricing from settings
@@ -314,6 +409,9 @@ export async function createOrder(orderData) {
     shippingFee,
     couponCode: calcResult.appliedCoupon?.code || null,
     totalAmount: calcResult.grandTotal + shippingFee,
+    clientIp:  ip,
+    deviceId,
+    userAgent,
     items: calcResult.validatedCart.map(vi => ({
       product: vi._id,
       name: vi.name,
@@ -327,18 +425,26 @@ export async function createOrder(orderData) {
     })),
   });
 
-  await newOrder.save();
-
-  for (const item of calcResult.validatedCart) {
-    if (item.selectedSize && item.selectedSize !== 'STD' && item.selectedSize !== 'Standard') {
-      await Product.updateOne(
-        { _id: item._id, 'variants.size': item.selectedSize },
-        { $inc: { 'variants.$.stock': -item.quantity, stock: -item.quantity } }
-      );
-    } else {
-      await Product.findByIdAndUpdate(item._id, { $inc: { stock: -item.quantity } });
-    }
+  let savedOrder;
+  try {
+    await newOrder.save();
+    savedOrder = newOrder;
+  } catch (err) {
+    // Order save failed after stock was reserved — release stock to avoid permanent lock
+    await releaseStockItems(calcResult.validatedCart.map(vi => ({
+      _id: vi._id, name: vi.name,
+      size: vi.selectedSize || vi.size, quantity: vi.quantity,
+    })));
+    throw err;
   }
+
+  // Stock was already atomically decremented by reserveStock() above — do NOT decrement again.
+
+  await trackAttempt({ ip, deviceId, userId, userAgent, type: 'order_created',
+    productIds: calcResult.validatedCart.map(i => String(i._id)) });
+
+  // Update the user's known IPs and devices
+  trackUserActivity(userId, { ip, deviceId, userAgent });
 
   if (calcResult.appliedCoupon) {
     await Coupon.findOneAndUpdate(
@@ -387,6 +493,10 @@ export async function createOrder(orderData) {
 export async function initiateOnlinePayment(orderData) {
   await connectDB();
 
+  // ── Protection: extract request identity, check blocks + rate limits ──
+  const { ip, userAgent } = await getRequestMeta();
+  const deviceId = sanitizeString(orderData.deviceId || '', 64);
+
   let userId = null;
   let session;
   try { session = await assertSession(); } catch { /* guest allowed */ }
@@ -421,6 +531,8 @@ export async function initiateOnlinePayment(orderData) {
           provider: 'guest',
           role: 'user',
           isVerified: false,
+          registrationIp:       ip || null,
+          registrationDeviceId: deviceId || null,
         });
       } catch (e) {
         if (e.code === 11000 && guestEmail) {
@@ -434,21 +546,21 @@ export async function initiateOnlinePayment(orderData) {
     userId = guestUser._id;
   }
 
+  // ── Block + rate-limit check (after userId is resolved) ──
+  const protectErr = await checkOrderProtection(ip, deviceId, userId);
+  if (protectErr) return { error: protectErr };
+
   if (!orderData?.items?.length) return { error: 'Cart is empty' };
 
   const calcResult = await calculateCart(orderData.items, orderData.couponCode);
   if (!calcResult.validatedCart?.length) return { error: 'No valid items in cart.' };
 
-  for (const item of calcResult.validatedCart) {
-    const product = await Product.findById(item._id);
-    if (!product) return { error: `Product not found: ${item.name}` };
-    if (item.selectedSize && item.selectedSize !== 'STD' && item.selectedSize !== 'Standard') {
-      const variant = product.variants.find(v => v.size === item.selectedSize);
-      if (!variant) return { error: `Size '${item.selectedSize}' not valid for "${product.name}".` };
-      if (variant.stock < item.quantity) return { error: `SOLD OUT: Size ${item.selectedSize} of "${product.name}".` };
-    } else if (product.stock < item.quantity) {
-      return { error: `SOLD OUT: "${product.name}" is out of stock.` };
-    }
+  // ── Atomic stock reservation — serialized per product by MongoDB document lock ──
+  const stockResult = await reserveStock(calcResult.validatedCart);
+  if (stockResult.error) {
+    await trackAttempt({ ip, deviceId, userId, userAgent, type: 'stock_fail',
+      productIds: calcResult.validatedCart.map(i => String(i._id)) });
+    return { error: stockResult.error };
   }
 
   const deliverySettings = await Settings.findOne({ key: 'delivery_pricing' }).lean();
@@ -457,29 +569,45 @@ export async function initiateOnlinePayment(orderData) {
   const freeDelivery = deliverySettings?.value?.freeDelivery ?? false;
   const shippingFee  = freeDelivery ? 0 : (orderData.shippingAddress?.method === 'outside' ? outsideCost : insideCost);
 
-  const pending = await PendingOrder.create({
-    userId,
-    guestInfo:       orderData.guestInfo,
-    shippingAddress: orderData.shippingAddress,
-    paymentMethod:   sanitizeString(orderData.paymentMethod || 'bKash', 30),
-    saveAddress:     !!orderData.saveAddress,
-    subTotal:        calcResult.cartTotal,
-    discountAmount:  calcResult.discountTotal || 0,
-    shippingFee,
-    couponCode:      calcResult.appliedCoupon?.code || null,
-    totalAmount:     calcResult.grandTotal + shippingFee,
-    items: calcResult.validatedCart.map(vi => ({
-      product:   vi._id,
-      name:      vi.name,
-      price:     vi.price,
-      basePrice: vi.basePrice ?? vi.price,
-      quantity:  vi.quantity,
-      size:      vi.selectedSize || vi.size,
-      image:     vi.image,
-      sku:       vi.sku || null,
-      barcode:   vi.barcode || null,
-    })),
-  });
+  let pending;
+  try {
+    pending = await PendingOrder.create({
+      userId,
+      guestInfo:       orderData.guestInfo,
+      shippingAddress: orderData.shippingAddress,
+      paymentMethod:   sanitizeString(orderData.paymentMethod || 'bKash', 30),
+      saveAddress:     !!orderData.saveAddress,
+      stockReserved:   true,
+      ip, deviceId, userAgent,
+      subTotal:        calcResult.cartTotal,
+      discountAmount:  calcResult.discountTotal || 0,
+      shippingFee,
+      couponCode:      calcResult.appliedCoupon?.code || null,
+      totalAmount:     calcResult.grandTotal + shippingFee,
+      items: calcResult.validatedCart.map(vi => ({
+        product:   vi._id,
+        name:      vi.name,
+        price:     vi.price,
+        basePrice: vi.basePrice ?? vi.price,
+        quantity:  vi.quantity,
+        size:      vi.selectedSize || vi.size,
+        image:     vi.image,
+        sku:       vi.sku || null,
+        barcode:   vi.barcode || null,
+      })),
+    });
+  } catch (err) {
+    // PendingOrder creation failed — release the stock we just reserved
+    await releaseStockItems(calcResult.validatedCart.map(vi => ({
+      _id: vi._id, name: vi.name,
+      size: vi.selectedSize || vi.size, quantity: vi.quantity,
+    })));
+    throw err;
+  }
+
+  await trackAttempt({ ip, deviceId, userId, userAgent, type: 'pending_created',
+    productIds: calcResult.validatedCart.map(i => String(i._id)),
+    pendingOrderId: pending._id.toString() });
 
   return { success: true, pendingId: pending._id.toString() };
 }
@@ -488,18 +616,26 @@ export async function initiateOnlinePayment(orderData) {
 export async function confirmPendingOrder(pendingId, paymentDetails) {
   await connectDB();
 
-  // Idempotency: if already confirmed, find and return existing order
-  const existingOrder = await Order.findOne({ 'paymentDetails.pendingId': pendingId }).lean();
-  if (existingOrder) {
-    // Already confirmed — ensure paymentStatus is Paid
-    if (existingOrder.paymentStatus !== 'Paid') {
-      await Order.findByIdAndUpdate(existingOrder._id, { paymentStatus: 'Paid', ...paymentDetails });
-    }
-    return { success: true, orderId: existingOrder.orderId };
-  }
+  // Atomically claim the PendingOrder — only one concurrent callback wins.
+  // If confirming is already true, another request got here first.
+  const pending = await PendingOrder.findOneAndUpdate(
+    { _id: pendingId, confirming: { $ne: true } },
+    { $set: { confirming: true } },
+    { new: false }
+  );
 
-  const pending = await PendingOrder.findById(pendingId);
-  if (!pending) return { error: 'Pending order not found or expired.' };
+  if (!pending) {
+    // Either already claimed by a concurrent callback, or already confirmed (TTL deleted it).
+    const existingOrder = await Order.findOne({ 'paymentDetails.pendingId': pendingId }).lean();
+    if (existingOrder) {
+      if (existingOrder.paymentStatus !== 'Paid') {
+        await Order.findByIdAndUpdate(existingOrder._id, { paymentStatus: 'Paid', ...paymentDetails });
+      }
+      return { success: true, orderId: existingOrder.orderId };
+    }
+    // Still in-flight by the other request — return success optimistically
+    return { success: true };
+  }
 
   // Re-validate stock before creating the real order
   for (const item of pending.items) {
@@ -535,6 +671,9 @@ export async function confirmPendingOrder(pendingId, paymentDetails) {
     paymentStatus:   'Paid',
     paymentTransactionId: paymentDetails?.paymentTransactionId || null,
     paymentDetails:  { ...paymentDetails, pendingId },
+    clientIp:  pending.ip       || null,
+    deviceId:  pending.deviceId || null,
+    userAgent: pending.userAgent || null,
     items: pending.items.map(i => ({
       product:   i.product,
       name:      i.name,
@@ -550,14 +689,18 @@ export async function confirmPendingOrder(pendingId, paymentDetails) {
 
   await newOrder.save();
 
-  for (const item of pending.items) {
-    if (item.size && item.size !== 'STD' && item.size !== 'Standard') {
-      await Product.updateOne(
-        { _id: item.product, 'variants.size': item.size },
-        { $inc: { 'variants.$.stock': -item.quantity, stock: -item.quantity } }
-      );
-    } else {
-      await Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } });
+  // Only decrement stock here if it wasn't already reserved at pending-order creation time.
+  // (stockReserved=true means stock was decremented atomically before payment — skip to avoid double-decrement)
+  if (!pending.stockReserved) {
+    for (const item of pending.items) {
+      if (item.size && item.size !== 'STD' && item.size !== 'Standard') {
+        await Product.updateOne(
+          { _id: item.product, 'variants.size': item.size },
+          { $inc: { 'variants.$.stock': -item.quantity, stock: -item.quantity } }
+        );
+      } else {
+        await Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } });
+      }
     }
   }
 
@@ -589,7 +732,57 @@ export async function confirmPendingOrder(pendingId, paymentDetails) {
   await PendingOrder.findByIdAndDelete(pendingId);
   revalidatePath('/admin/orders');
 
+  // Update the user's known IPs and devices
+  if (pending.ip || pending.deviceId) {
+    trackUserActivity(pending.userId, {
+      ip: pending.ip, deviceId: pending.deviceId, userAgent: pending.userAgent,
+    });
+  }
+
   return { success: true, orderId: newOrder.orderId };
+}
+
+// ─── RELEASE RESERVED STOCK (abandoned / failed payments) ────────────────────
+// Call this from your payment-failure / cancel callback routes.
+// Also useful as a periodic cleanup for PendingOrders older than 2 hours.
+export async function releasePendingOrderStock(pendingId, reason = 'payment_fail') {
+  await connectDB();
+  const pending = await PendingOrder.findById(pendingId).lean();
+  if (!pending) return { success: true }; // already gone
+  if (pending.stockReserved) {
+    await releaseStockItems(pending.items);
+  }
+  await PendingOrder.findByIdAndDelete(pendingId);
+
+  // Track the failure for abuse detection
+  await trackAttempt({
+    ip:         pending.ip       || 'unknown',
+    deviceId:   pending.deviceId || '',
+    userId:     pending.userId,
+    userAgent:  pending.userAgent || '',
+    type:       reason === 'payment_cancel' ? 'payment_cancel' : 'payment_fail',
+    productIds: pending.items.map(i => String(i.product)),
+    pendingOrderId: pendingId,
+  });
+
+  return { success: true };
+}
+
+// Releases stock for ALL pending orders that have been sitting for over 2 hours
+// without being confirmed (abandoned payments). Safe to call on a cron or at startup.
+export async function releaseExpiredPendingOrders() {
+  await connectDB();
+  const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const expired = await PendingOrder.find({
+    stockReserved: true,
+    confirming: { $ne: true },
+    createdAt: { $lt: cutoff },
+  }).lean();
+  for (const p of expired) {
+    await releaseStockItems(p.items);
+    await PendingOrder.findByIdAndDelete(p._id);
+  }
+  return { released: expired.length };
 }
 
 // ─── ADMIN ORDER MANAGEMENT ───────────────────────────────────────────────────

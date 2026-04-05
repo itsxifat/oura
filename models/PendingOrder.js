@@ -29,6 +29,12 @@ const PendingOrderSchema = new mongoose.Schema({
   totalAmount:    Number,
   paymentMethod:  String,
   saveAddress:    Boolean,
+  confirming:     { type: Boolean, default: false },
+  stockReserved:  { type: Boolean, default: false },
+  // Device/network fingerprint — stored for fraud auditing
+  ip:        { type: String, default: '' },
+  deviceId:  { type: String, default: '' },
+  userAgent: { type: String, default: '' },
   // TTL: auto-delete after 2 hours if not confirmed
   createdAt: { type: Date, default: Date.now, expires: 7200 },
 });

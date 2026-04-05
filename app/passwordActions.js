@@ -122,7 +122,7 @@ export async function requestPasswordReset(formData) {
   }
 }
 
-// --- PERFORM RESET ---
+// --- PERFORM RESET (also upgrades guest accounts to full credentials users) ---
 export async function resetPassword(token, newPassword) {
   await connectDB();
 
@@ -135,12 +135,27 @@ export async function resetPassword(token, newPassword) {
     return { error: "This link is invalid or has expired." };
   }
 
+  if (newPassword.length < 8) {
+    return { error: "Password must be at least 8 characters." };
+  }
+
   const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-  user.password = hashedPassword;
-  user.resetPasswordToken = undefined;
+  user.password           = hashedPassword;
+  user.resetPasswordToken   = undefined;
   user.resetPasswordExpires = undefined;
-  await user.save();
 
-  return { success: true };
+  // ── Guest account upgrade ──────────────────────────────────────────────────
+  // If this user was a guest (no password before), setting a password promotes
+  // them to a full credentials account. All their orders and history are kept.
+  const wasGuest = user.provider === 'guest';
+  if (wasGuest) {
+    user.provider   = 'credentials';
+    user.isVerified = true;
+    // If the email was a placeholder (guest_PHONE@oura.guest), it stays as-is —
+    // the user should update it via account settings if needed.
+  }
+
+  await user.save();
+  return { success: true, wasGuest };
 }

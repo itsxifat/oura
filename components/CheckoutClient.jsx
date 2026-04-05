@@ -6,6 +6,49 @@ import { useRouter } from 'next/navigation';
 import { createOrder, initiateOnlinePayment, saveAddress } from '@/app/actions';
 
 const CHECKOUT_STORAGE_KEY = 'oura_checkout_form';
+const DEVICE_ID_KEY        = 'oura_device_id';
+
+/**
+ * Generates a stable browser fingerprint from public browser APIs.
+ * Stored in localStorage so it persists across sessions.
+ * NOTE: MAC address is a network Layer-2 concept and is NOT accessible
+ * from JavaScript — the best client-side identifier is this composite hash.
+ */
+function buildDeviceFingerprint() {
+  try {
+    const parts = [
+      navigator.userAgent,
+      navigator.language,
+      `${screen.width}x${screen.height}x${screen.colorDepth}`,
+      new Intl.DateTimeFormat().resolvedOptions().timeZone,
+      String(navigator.hardwareConcurrency || 0),
+      navigator.platform || '',
+      String(!!navigator.cookieEnabled),
+      String(typeof window.indexedDB !== 'undefined'),
+    ].join('||');
+    // djb2 hash → base36 string
+    let h = 5381;
+    for (let i = 0; i < parts.length; i++) {
+      h = Math.imul(h, 33) ^ parts.charCodeAt(i);
+    }
+    return `fp_${(h >>> 0).toString(36)}`;
+  } catch {
+    return `fp_${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function getOrCreateDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = buildDeviceFingerprint();
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return buildDeviceFingerprint();
+  }
+}
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -176,6 +219,22 @@ const GuestSuccessOverlay = ({ guestEmail, guestPhone, onSkip }) => {
         </div>
       </motion.div>
 
+      {/* Claim account nudge — shown when guest has a real email */}
+      {guestEmail && !guestEmail.endsWith('@oura.guest') && (
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.52 }}
+          className="w-full max-w-sm bg-[#B91C1C]/10 border border-[#B91C1C]/25 rounded-2xl px-5 py-4 mb-6 text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#B91C1C] mb-1.5">Claim Your Account</p>
+          <p className="text-[11px] text-neutral-400 leading-relaxed mb-4">
+            A guest account was created for <span className="text-white font-semibold">{guestEmail}</span>.
+            Set a password to access all your orders and track deliveries — your data is already saved.
+          </p>
+          <Link href={`/forgot-password`}
+            className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-[#B91C1C] hover:text-white transition-colors border-b border-[#B91C1C]/40 hover:border-white pb-0.5">
+            Set Up Password →
+          </Link>
+        </motion.div>
+      )}
+
       <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.56 }}
         className="flex flex-col sm:flex-row gap-3 w-full max-w-sm mb-8">
         <Link href="/login" className="flex-1 h-12 bg-white text-black rounded-xl text-[11px] font-bold uppercase tracking-[0.15em] hover:bg-neutral-100 transition-colors flex items-center justify-center gap-2">
@@ -298,6 +357,10 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
 
   const delivery  = shopSettings?.deliveryPricing ?? { insideDhaka: 80, outsideDhaka: 150, freeDelivery: false };
   const pmCfg     = shopSettings?.paymentMethods   ?? { cashOnDelivery: true, bkash: false, sslcommerz: false };
+
+  /* ── device fingerprint (set on mount, sent with every order) ── */
+  const [deviceId, setDeviceId] = useState('');
+  useEffect(() => { setDeviceId(getOrCreateDeviceId()); }, []);
 
   /* ── ui state ── */
   const [loading,          setLoading]          = useState(false);
@@ -451,6 +514,7 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
       totalAmount: total,
       paymentMethod,
       saveAddress: !useSaved && saveForLater,
+      deviceId,
     };
 
     // ── Online payment (bKash / SSLCommerz): save PendingOrder, redirect to gateway ──

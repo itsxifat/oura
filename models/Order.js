@@ -68,6 +68,11 @@ const orderSchema = new mongoose.Schema(
     courier_status:    { type: String, default: null }, // raw status from Steadfast
     courier_synced_at: { type: Date,   default: null }, // last time we polled Steadfast
 
+    // Device & network info captured at order time
+    clientIp:  { type: String, default: null },
+    deviceId:  { type: String, default: null },
+    userAgent: { type: String, default: null },
+
     // Optional: For the Fraud Check feature later
     isHighRisk: { type: Boolean, default: false },
     cancellationReason: { type: String, default: null },
