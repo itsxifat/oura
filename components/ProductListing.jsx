@@ -82,11 +82,11 @@ const ProductSkeleton = () => (
 // 2. MAIN COMPONENT
 // ----------------------------------------------------------------------------
 
-export default function ProductListing({ initialProducts }) {
+export default function ProductListing({ initialProducts, initialSearch = '' }) {
   const [products] = useState(initialProducts || []);
-  
+
   // Logic
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [activeFilters, setActiveFilters] = useState({ categories: [], tags: [] });
   const [sortOption, setSortOption] = useState('newest');
   const [viewMode, setViewMode] = useState('grid');

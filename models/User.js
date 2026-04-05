@@ -16,7 +16,7 @@ const UserSchema = new mongoose.Schema({
     contentType: String
   },
 
-  provider: { type: String, enum: ['credentials', 'google'], default: 'credentials' },
+  provider: { type: String, enum: ['credentials', 'google', 'guest'], default: 'credentials' },
   isVerified: { type: Boolean, default: false },
   otp: { type: String },
   otpExpiry: { type: Date },

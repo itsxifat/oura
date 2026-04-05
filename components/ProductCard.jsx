@@ -59,12 +59,8 @@ export default function ProductCard({ product }) {
     minimumFractionDigits: 0,
   }).format(num || 0);
 
-  // --- TAG LOGIC ---
-  let displayTag = product.tags?.[0]?.name || product.tag;
-  if (!displayTag) {
-      if (isSaleActive) displayTag = "SALE";
-      else if (new Date(product.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) displayTag = "NEW";
-  }
+  // --- TAG LOGIC --- Only show tags actually assigned in the database
+  const displayTag = product.tags?.[0]?.name || product.tag || null;
 
   // --- ADD TO CART HANDLER ---
   const handleAddToCart = (selectedVariant = null) => {

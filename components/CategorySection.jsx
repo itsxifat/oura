@@ -34,7 +34,7 @@ export default async function CategorySection() {
         {/* --- VIEW ALL BUTTON (Visible on PC & Mobile) --- */}
         <div className="mt-12 md:mt-16 text-center">
             <Link 
-              href="/categories" 
+              href="/category"
               className="inline-flex items-center gap-3 px-8 py-4 bg-black text-white text-xs md:text-sm font-bold uppercase tracking-[0.2em] hover:bg-[#B91C1C] transition-colors duration-500 group"
             >
                View All Categories

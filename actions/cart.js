@@ -17,10 +17,10 @@ export async function calculateCart(localCart, manualCode = '') {
   // A. VALIDATE ITEMS (Fetch fresh data from DB)
   for (const item of localCart) {
     try {
-      // Use .lean() for plain objects, cleaner performance
-      const product = await Product.findById(item._id)
+      const productId = item._id || item.product;
+      const product = await Product.findById(productId)
         .populate('category')
-        .populate('tags') 
+        .populate('tags')
         .lean();
 
       if (!product) continue;
@@ -55,17 +55,20 @@ export async function calculateCart(localCart, manualCode = '') {
 
       // 4. Construct Fresh Item
       const freshItem = {
-        ...item, 
+        ...item,
+        _id: product._id,
         name: product.name,
         slug: product.slug,
         image: (product.images && product.images.length > 0) ? product.images[0] : '/placeholder.jpg',
-        price: product.price,
+        price: currentPrice,
+        basePrice: product.price,
         discountPrice: isSaleActive ? product.discountPrice : null,
-        category: product.category, // Will be serialized at end
-        tags: product.tags,         // Will be serialized at end
-        tag: displayTag,            // <--- The specific tag string for UI
+        sku: product.sku || null,
+        barcode: product.barcode || null,
+        category: product.category,
+        tags: product.tags,
+        tag: displayTag,
         stock: availableStock,
-        barcode: product.barcode
       };
 
       // Cap quantity
@@ -141,110 +144,4 @@ export async function calculateCart(localCart, manualCode = '') {
     error,
     validatedCart
   }));
-}
-
-// --- 2. CATEGORY PAGE DATA ---
-export async function getCategoryPageData(slug, filters = {}) {
-  await connectDB();
-
-  // 1. Find Main Category
-  const mainCategory = await Category.findOne({ slug }).lean();
-  if (!mainCategory) return null;
-
-  // 2. Find Sub Categories
-  const subCategories = await Category.find({ parentCategory: mainCategory._id }).lean();
-  
-  // 3. Filter Setup
-  const min = filters.minPrice ? Number(filters.minPrice) : 0;
-  const max = filters.maxPrice ? Number(filters.maxPrice) : Infinity;
-  const now = new Date();
-
-  // 4. Build Query Helper
-  const buildProductQuery = (catId) => {
-    const query = { category: catId };
-
-    if (filters.search) {
-      query.$or = [
-         { name: { $regex: filters.search, $options: 'i' } }
-      ];
-    }
-
-    if (filters.minPrice || filters.maxPrice) {
-      query.$expr = {
-        $and: [
-           { $gte: [
-              { $cond: {
-                  if: { $and: [
-                     { $gt: ["$discountPrice", 0] },
-                     { $lt: ["$discountPrice", "$price"] },
-                     { $or: [ { $eq: ["$saleStartDate", null] }, { $lte: ["$saleStartDate", now] } ] },
-                     { $or: [ { $eq: ["$saleEndDate", null] }, { $gte: ["$saleEndDate", now] } ] }
-                  ]},
-                  then: "$discountPrice",
-                  else: "$price"
-              }}, 
-              min 
-           ]},
-           { $lte: [
-              { $cond: {
-                  if: { $and: [
-                     { $gt: ["$discountPrice", 0] },
-                     { $lt: ["$discountPrice", "$price"] },
-                     { $or: [ { $eq: ["$saleStartDate", null] }, { $lte: ["$saleStartDate", now] } ] },
-                     { $or: [ { $eq: ["$saleEndDate", null] }, { $gte: ["$saleEndDate", now] } ] }
-                  ]},
-                  then: "$discountPrice",
-                  else: "$price"
-              }}, 
-              max 
-           ]}
-        ]
-      };
-    }
-    return query;
-  };
-
-  // 5. Fetch Products (Main)
-  const mainProducts = await Product.find(buildProductQuery(mainCategory._id))
-    .sort({ createdAt: -1 })
-    .populate('category')
-    .populate('tags')
-    .lean();
-
-  // 6. Fetch Products (Sections)
-  const sections = await Promise.all(subCategories.map(async (sub) => {
-    const products = await Product.find(buildProductQuery(sub._id))
-      .sort({ createdAt: -1 })
-      .limit(8)
-      .populate('category')
-      .populate('tags')
-      .lean();
-
-    return {
-      _id: sub._id,
-      name: sub.name,
-      slug: sub.slug,
-      products
-    };
-  }));
-
-  // --- CRITICAL FIX: DEEP SERIALIZATION ---
-  return JSON.parse(JSON.stringify({
-    mainCategory,
-    mainProducts,
-    sections: sections.filter(s => s.products.length > 0)
-  }));
-}
-
-// --- 3. TOP CATEGORIES (For Main Page) ---
-export async function getTopCategories() {
-  await connectDB();
-  
-  // Example logic: Get parent categories
-  const categories = await Category.find({ parentCategory: null })
-    .limit(4)
-    .lean();
-
-  // --- CRITICAL FIX: DEEP SERIALIZATION ---
-  return JSON.parse(JSON.stringify(categories));
 }

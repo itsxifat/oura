@@ -1,33 +1,54 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react'; 
+import React, { useEffect, useState, useMemo } from 'react';
 import { getAdminOrders, updateOrderStatus } from '@/app/actions';
-import { checkFraud } from '@/actions/fraud'; 
-import { sendToSteadfast, bulkShipToSteadfast } from '@/actions/steadfast'; 
-import { 
-  Package, Truck, Check, X, Search, 
-  ChevronDown, ChevronUp, MapPin, 
-  User, CreditCard, ShoppingBag, 
-  ShieldAlert, TicketPercent, Send, Filter, MoreHorizontal, Loader2, AlertCircle
+import { checkFraud } from '@/actions/fraud';
+import { sendToSteadfast, bulkShipToSteadfast } from '@/actions/steadfast';
+import {
+  Package, Truck, Check, X, ChevronDown, ChevronUp,
+  MapPin, User, CreditCard, ShoppingBag, ShieldAlert,
+  Send, Loader2, AlertCircle, Banknote, CheckCircle2,
+  Clock, Hash, Phone, Calendar,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'react-hot-toast'; 
-import Barcode from 'react-barcode'; 
+import { toast } from 'react-hot-toast';
+import Barcode from 'react-barcode';
+import {
+  Taka, AdminPageHeader, AdminStatCard, AdminFilterBar, AdminFilterRow,
+  AdminSearchInput, CustomSelect, AdminLoadingScreen, AdminEmptyState,
+  OrderStatusBadge, PaymentMethodBadge, PaymentStatusBadge,
+} from '@/app/admin/components/AdminUI';
 
-// --- TAKA SVG COMPONENT ---
-const Taka = ({ size = 14, className = "", weight = "bold" }) => (
-  <svg width={size} height={size+2} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={`inline-block align-middle ${className}`}>
-    <text x="50%" y="55%" dominantBaseline="middle" textAnchor="middle" fontSize="20" fontWeight={weight === 'bold' ? 'bold' : 'normal'} fill="currentColor" style={{ fontFamily: "var(--font-heading)" }}>৳</text>
-  </svg>
-);
+// ─── helpers ──────────────────────────────────────────────────────────────────
+const fmt = (n) => Number(n ?? 0).toLocaleString('en-BD');
+const fmtDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtTime = (d) => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-// --- HELPER: FORMAT ID ---
-const formatOrderId = (id) => {
-  if (!id) return '';
-  return id.startsWith('#') ? id : `#${id}`;
+const STATUS_OPTIONS = [
+  { value: 'All', label: 'All Statuses' },
+  { value: 'Pending', label: 'Pending' },
+  { value: 'Processing', label: 'Processing' },
+  { value: 'Shipped', label: 'Shipped' },
+  { value: 'Delivered', label: 'Delivered' },
+  { value: 'Cancelled', label: 'Cancelled' },
+];
+
+const PAYMENT_OPTIONS = [
+  { value: 'All', label: 'All Methods' },
+  { value: 'COD', label: 'Cash on Delivery' },
+  { value: 'bKash', label: 'bKash' },
+  { value: 'SSLCommerz', label: 'SSL Commerz' },
+];
+
+const INDICATOR_COLOR = {
+  Pending: 'bg-amber-400',
+  Processing: 'bg-blue-500',
+  Shipped: 'bg-violet-500',
+  Delivered: 'bg-green-500',
+  Cancelled: 'bg-red-500',
 };
 
-// --- COMPONENT: FRAUD CHECK MODAL ---
+// ─── fraud check modal ────────────────────────────────────────────────────────
 const FraudCheckModal = ({ isOpen, onClose, customer }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
@@ -36,539 +57,554 @@ const FraudCheckModal = ({ isOpen, onClose, customer }) => {
     if (isOpen && customer) {
       setLoading(true);
       checkFraud(customer.phone)
-        .then(result => { setData(result); setLoading(false); })
-        .catch(err => { console.error(err); setLoading(false); });
-    } else {
-      setData(null);
-    }
+        .then(r => { setData(r); setLoading(false); })
+        .catch(() => setLoading(false));
+    } else { setData(null); }
   }, [isOpen, customer]);
 
   if (!isOpen) return null;
 
-  const getSteadfastStats = () => {
-      if (!data?.sources?.steadfast) return { total: 0, delivered: 0, returned: 0 };
-      const s = data.sources.steadfast;
-      return {
-          total: (s.total_delivered || 0) + (s.total_cancelled || 0),
-          delivered: s.total_delivered || 0,
-          returned: s.total_cancelled || 0
-      };
-  };
+  const ss = data?.sources?.steadfast;
+  const sfStats = { total: (ss?.total_delivered ?? 0) + (ss?.total_cancelled ?? 0), delivered: ss?.total_delivered ?? 0, returned: ss?.total_cancelled ?? 0 };
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-        animate={{ opacity: 1, scale: 1, y: 0 }} 
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden font-manrope border border-gray-100"
+    <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }}
+        className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100"
       >
-        <div className="bg-[#800000] text-white p-6 flex justify-between items-center relative overflow-hidden">
-           {/* Decorative Corner */}
-           <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-bl-full -mr-8 -mt-8 pointer-events-none"></div>
-           
-           <div className="relative z-10">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70 block mb-1">Risk Analysis</span>
-              <h3 className="font-bodoni text-2xl">{customer?.firstName}</h3>
-           </div>
-           <button onClick={onClose} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors relative z-10"><X size={18}/></button>
+        <div className="bg-[#800000] text-white p-5 flex justify-between items-start relative overflow-hidden">
+          <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full pointer-events-none" />
+          <div className="relative z-10">
+            <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/60 block mb-1">Risk Analysis</span>
+            <h3 className="font-bodoni text-2xl">{customer?.firstName} {customer?.lastName}</h3>
+            <p className="text-xs text-white/70 font-mono mt-0.5">{customer?.phone}</p>
+          </div>
+          <button onClick={onClose} className="bg-white/15 p-2 rounded-xl hover:bg-white/25 transition-colors relative z-10"><X size={16}/></button>
         </div>
-
-        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar bg-[#faf9f6]">
-           {loading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                 <Loader2 className="animate-spin text-[#800000] mb-4" size={32}/>
-                 <p className="text-xs font-bold uppercase text-gray-400 tracking-widest">Scanning Databases...</p>
+        <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto custom-scrollbar bg-[#faf9f6]">
+          {loading ? (
+            <div className="flex flex-col items-center py-12 gap-3">
+              <Loader2 className="animate-spin text-[#800000]" size={28}/>
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Scanning databases…</p>
+            </div>
+          ) : data ? (
+            <>
+              {data.sources?.steadfast?.frauds?.length > 0 && (
+                <div className="bg-red-50 border border-red-200 p-4 rounded-xl">
+                  <div className="flex gap-2 items-center mb-2">
+                    <ShieldAlert size={16} className="text-[#800000]"/>
+                    <h4 className="font-black text-[#800000] text-xs uppercase tracking-wide">Fraud Record Found</h4>
+                  </div>
+                  {data.sources.steadfast.frauds.map((f, i) => (
+                    <div key={i} className="text-xs bg-white p-3 rounded-lg border border-red-100 text-gray-700 leading-relaxed">{f.details || 'No details.'}</div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className={`text-4xl font-bodoni font-bold ${data.score < 50 ? 'text-[#800000]' : 'text-green-700'}`}>{data.score}%</div>
+                <div className="flex-1 border-l border-gray-100 pl-4">
+                  <h4 className="font-black text-sm uppercase text-gray-900 tracking-wide">{data.level} Risk</h4>
+                  <p className="text-xs text-gray-500 mt-1 leading-snug">{data.suggestion}</p>
+                </div>
               </div>
-           ) : data ? (
-              <>
-                 {data.sources.steadfast.frauds && data.sources.steadfast.frauds.length > 0 && (
-                    <div className="bg-red-50 border border-red-100 p-4 rounded-xl">
-                       <div className="flex gap-3 items-center mb-2">
-                          <ShieldAlert size={20} className="text-[#800000]"/>
-                          <h4 className="font-bold text-[#800000] text-sm uppercase tracking-wide">Fraud Record Found</h4>
-                       </div>
-                       <div className="space-y-2">
-                          {data.sources.steadfast.frauds.map((f, i) => (
-                             <div key={i} className="text-xs bg-white p-3 rounded-lg border border-red-100 text-gray-700 shadow-sm leading-relaxed">
-                                {f.details || "No details available."}
-                             </div>
-                          ))}
-                       </div>
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                {[
+                  { label: 'Internal', data: data.sources?.internal },
+                  { label: 'Steadfast', data: sfStats },
+                  { label: 'Pathao', data: data.sources?.pathao },
+                ].map(({ label, data: d }) => d ? (
+                  <div key={label} className="flex justify-between items-center text-xs p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                    <span className="font-black text-gray-700 uppercase tracking-wide flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#800000]"/>
+                      {label}
+                    </span>
+                    <div className="flex gap-6">
+                      {[['Total', d.total, 'text-gray-900'], ['Done', d.delivered, 'text-green-700'], ['Return', d.returned, 'text-[#800000]']].map(([lbl, val, cls]) => (
+                        <div key={lbl} className="text-center">
+                          <span className={`block font-bold text-base ${cls}`}>{val ?? 0}</span>
+                          <span className="text-[9px] text-gray-400 uppercase font-black tracking-wider">{lbl}</span>
+                        </div>
+                      ))}
                     </div>
-                 )}
-
-                 <div className="flex items-center gap-5 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                    <div className={`text-4xl font-bodoni font-bold ${data.score < 50 ? 'text-[#800000]' : 'text-green-700'}`}>{data.score}%</div>
-                    <div className="flex-1 border-l border-gray-100 pl-5">
-                       <h4 className="font-bold text-sm uppercase text-gray-900 tracking-wide">{data.level} Risk</h4>
-                       <p className="text-xs text-gray-500 mt-1 leading-snug">{data.suggestion}</p>
-                    </div>
-                 </div>
-
-                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100 shadow-sm">
-                    <StatRow label="Internal" data={data.sources.internal} />
-                    <StatRow label="Steadfast" data={getSteadfastStats()} />
-                    <StatRow label="Pathao" data={data.sources.pathao} />
-                 </div>
-              </>
-           ) : (
-              <div className="text-center py-10 text-gray-400">
-                 <p className="text-xs uppercase tracking-widest">No analysis data available.</p>
+                  </div>
+                ) : null)}
               </div>
-           )}
+            </>
+          ) : (
+            <p className="text-center py-8 text-xs text-gray-400 uppercase tracking-widest">No analysis data.</p>
+          )}
         </div>
       </motion.div>
     </div>
   );
 };
 
-const StatRow = ({ label, data }) => {
-  if (!data) return null;
-  return (
-    <div className="flex justify-between items-center text-xs p-4 hover:bg-gray-50 transition-colors">
-       <div className="font-bold text-gray-900 w-1/3 uppercase tracking-wide flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]"></div>
-          {label}
-       </div>
-       <div className="flex gap-6 w-2/3 justify-end">
-          <div className="text-center">
-             <span className="block font-bold text-lg text-gray-900">{data.total || 0}</span>
-             <span className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">Total</span>
-          </div>
-          <div className="text-center">
-             <span className="block font-bold text-lg text-green-700">{data.delivered || 0}</span>
-             <span className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">Done</span>
-          </div>
-          <div className="text-center">
-             <span className="block font-bold text-lg text-[#800000]">{data.returned || 0}</span>
-             <span className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">Return</span>
-          </div>
-       </div>
-    </div>
-  );
-};
-
-// --- COMPONENT: CANCEL MODAL ---
+// ─── cancel modal ─────────────────────────────────────────────────────────────
+const CANCEL_REASONS = ['Customer Request', 'Stock Issue', 'Duplicate Order', 'Fraud Suspected', 'Other'];
 const CancelModal = ({ isOpen, onClose, onConfirm }) => {
   if (!isOpen) return null;
-  const reasons = ["Customer Request", "Stock Issue", "Duplicate Order", "Fraud Suspected", "Other"];
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
-      <motion.div initial={{scale:0.95, opacity: 0}} animate={{scale:1, opacity: 1}} className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-16 h-16 bg-red-50 rounded-bl-full -mr-8 -mt-8 pointer-events-none"></div>
-        
-        <h3 className="font-bodoni text-2xl text-black mb-2">Cancel Order</h3>
-        <p className="text-xs text-gray-500 mb-6 font-medium">Please select a reason for cancellation.</p>
-        
-        <div className="space-y-2">
-           {reasons.map((reason) => (
-              <button 
-                key={reason} 
-                onClick={() => onConfirm(reason)} 
-                className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-red-50 hover:text-[#800000] rounded-xl text-xs font-bold uppercase tracking-wide transition-all border border-transparent hover:border-red-100 group flex justify-between items-center"
-              >
-                {reason}
-                <ChevronDown size={14} className="opacity-0 group-hover:opacity-100 -rotate-90 transition-all"/>
-              </button>
-           ))}
+    <div className="fixed inset-0 z-999 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-gray-100"
+      >
+        <div className="flex items-start gap-3 mb-5">
+          <AlertCircle size={20} className="text-red-500 shrink-0 mt-0.5"/>
+          <div>
+            <h3 className="font-bodoni text-xl text-black">Cancel Order</h3>
+            <p className="text-xs text-gray-500 mt-1">Select a reason for cancellation.</p>
+          </div>
         </div>
-        <button onClick={onClose} className="mt-6 w-full py-3 text-xs text-gray-400 font-bold uppercase tracking-widest hover:text-black transition-colors">Dismiss</button>
+        <div className="space-y-2">
+          {CANCEL_REASONS.map(r => (
+            <button key={r} onClick={() => onConfirm(r)}
+              className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-red-50 hover:text-[#800000] rounded-xl text-xs font-black uppercase tracking-wide transition-all border border-transparent hover:border-red-100 flex justify-between items-center group"
+            >
+              {r} <ChevronDown size={13} className="opacity-0 group-hover:opacity-100 -rotate-90 transition-all"/>
+            </button>
+          ))}
+        </div>
+        <button onClick={onClose} className="mt-5 w-full py-2.5 text-xs text-gray-400 font-black uppercase tracking-widest hover:text-black transition-colors">
+          Dismiss
+        </button>
       </motion.div>
     </div>
   );
 };
 
-// --- MAIN PAGE COMPONENT ---
+// ─── action button ────────────────────────────────────────────────────────────
+const ACTION_STYLES = {
+  blue:   'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200',
+  purple: 'bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200',
+  green:  'bg-green-50 text-green-700 hover:bg-green-100 border-green-200',
+};
+function ActionBtn({ onClick, icon, label, color = 'blue', loading: ld }) {
+  return (
+    <button onClick={onClick} disabled={ld}
+      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border disabled:opacity-50 ${ACTION_STYLES[color]}`}
+    >
+      {ld ? <Loader2 size={13} className="animate-spin"/> : icon} {label}
+    </button>
+  );
+}
+
+// ─── order card ───────────────────────────────────────────────────────────────
+function OrderCard({ order, expanded, onToggle, onStatusChange, onFraudCheck, onCancel, shippingId, onShip }) {
+  const pd = order.paymentDetails;
+  const isPaid = order.paymentStatus === 'Paid';
+  const shippingFee = order.shippingFee ?? (order.shippingAddress?.method === 'outside' ? 150 : 80);
+
+  return (
+    <motion.div layout key={order._id}
+      className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all overflow-hidden"
+    >
+      {/* Summary row */}
+      <div
+        className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 sm:p-5 cursor-pointer relative select-none"
+        onClick={onToggle}
+      >
+        {/* Status bar */}
+        <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl ${INDICATOR_COLOR[order.status] ?? 'bg-gray-300'}`} />
+
+        {/* ID + status */}
+        <div className="flex items-center gap-3 sm:w-56 pl-3">
+          <div className="w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 border border-gray-100 shrink-0">
+            <Package size={16}/>
+          </div>
+          <div className="min-w-0">
+            <p className="font-mono font-black text-sm text-black tracking-wide truncate">{order.orderId}</p>
+            <div className="mt-0.5">
+              <OrderStatusBadge status={order.status}/>
+            </div>
+          </div>
+        </div>
+
+        {/* Customer */}
+        <div className="flex-1 min-w-0 sm:pl-2">
+          <p className="font-bold text-sm text-gray-900 truncate">{order.guestInfo?.firstName} {order.guestInfo?.lastName}</p>
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+            <span className="text-[10px] font-mono text-gray-400">{order.guestInfo?.phone}</span>
+            <span className="text-[9px] text-gray-300">{fmtDate(order.createdAt)} · {fmtTime(order.createdAt)}</span>
+          </div>
+        </div>
+
+        {/* Amount + payment */}
+        <div className="flex items-center gap-4 sm:gap-6 sm:text-right flex-wrap">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">{order.items.length} item{order.items.length !== 1 ? 's' : ''}</p>
+            <p className="font-bodoni font-bold text-lg text-[#800000]"><Taka size={14}/>{fmt(order.totalAmount)}</p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <PaymentMethodBadge method={order.paymentMethod}/>
+            <PaymentStatusBadge status={order.paymentStatus}/>
+          </div>
+          <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }} className="text-gray-300 shrink-0">
+            <ChevronDown size={18}/>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Expanded */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.28, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-gray-100 bg-[#faf9f6]/60 p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+              {/* LEFT col */}
+              <div className="space-y-4">
+
+                {/* Delivery */}
+                <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MapPin size={14} className="text-[#800000]"/>
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-700">Delivery</h4>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400 font-bold uppercase tracking-wide text-[9px]">Name</span>
+                      <span className="font-bold text-gray-900">{order.guestInfo?.firstName} {order.guestInfo?.lastName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400 font-bold uppercase tracking-wide text-[9px]">Phone</span>
+                      <span className="font-mono font-bold text-gray-900">{order.guestInfo?.phone}</span>
+                    </div>
+                    <div className="pt-2 border-t border-gray-100">
+                      <p className="text-gray-400 font-bold uppercase tracking-wide text-[9px] mb-1">Address</p>
+                      <p className="text-xs text-gray-700 leading-relaxed bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                        {order.shippingAddress?.address}, {order.shippingAddress?.city}
+                        {order.shippingAddress?.postalCode ? `, ${order.shippingAddress.postalCode}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex justify-between pt-1">
+                      <span className="text-gray-400 font-bold uppercase tracking-wide text-[9px]">Zone</span>
+                      <span className="font-bold text-gray-900 capitalize">{order.shippingAddress?.method ?? 'inside'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment */}
+                <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <CreditCard size={14} className="text-[#800000]"/>
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-700">Payment</h4>
+                    </div>
+                    <PaymentStatusBadge status={order.paymentStatus}/>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 font-bold uppercase tracking-wide text-[9px]">Method</span>
+                      <PaymentMethodBadge method={order.paymentMethod}/>
+                    </div>
+                    <div className="flex justify-between border-t border-gray-100 pt-2">
+                      <span className="text-gray-400 font-bold uppercase tracking-wide text-[9px]">Subtotal</span>
+                      <span className="font-bold text-gray-900"><Taka size={10}/>{fmt(order.subTotal ?? order.totalAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400 font-bold uppercase tracking-wide text-[9px]">Shipping</span>
+                      <span className="font-bold text-gray-900"><Taka size={10}/>{fmt(shippingFee)}</span>
+                    </div>
+                    {(order.discountAmount ?? 0) > 0 && (
+                      <div className="flex justify-between text-[#800000]">
+                        <span className="font-bold uppercase tracking-wide text-[9px]">Discount {order.couponCode ? `(${order.couponCode})` : ''}</span>
+                        <span className="font-bold">−<Taka size={10}/>{fmt(order.discountAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t-2 border-black pt-2 mt-1">
+                      <span className="font-black text-gray-900 text-xs uppercase tracking-wide">Total</span>
+                      <span className="font-bodoni font-bold text-base text-[#800000]"><Taka size={14}/>{fmt(order.totalAmount)}</span>
+                    </div>
+                    {isPaid ? (
+                      <div className="flex justify-between items-center bg-green-50 border border-green-100 rounded-lg p-2 text-[9px] font-black uppercase tracking-wide text-green-700">
+                        <span className="flex items-center gap-1"><CheckCircle2 size={10}/> Paid</span>
+                        <span>৳0 due</span>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center bg-amber-50 border border-amber-100 rounded-lg p-2 text-[9px] font-black uppercase tracking-wide text-amber-700">
+                        <span className="flex items-center gap-1"><Clock size={10}/> Due on delivery</span>
+                        <span><Taka size={9}/>{fmt(order.totalAmount)}</span>
+                      </div>
+                    )}
+                    {order.paymentTransactionId && (
+                      <div className="pt-1 border-t border-gray-100">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1 flex items-center gap-1"><Hash size={9}/>TXN</p>
+                        <p className="font-mono text-[10px] text-gray-700 break-all">{order.paymentTransactionId}</p>
+                      </div>
+                    )}
+                    {pd?.gateway === 'bKash' && pd.customerMsisdn && (
+                      <div className="flex justify-between pt-1 border-t border-gray-100">
+                        <span className="text-gray-400 font-bold uppercase tracking-wide text-[9px] flex items-center gap-1"><Phone size={9}/>bKash No.</span>
+                        <span className="font-mono font-bold text-[#E2136E] text-[10px]">{pd.customerMsisdn}</span>
+                      </div>
+                    )}
+                    {pd?.gateway === 'SSLCommerz' && pd.cardType && (
+                      <div className="flex justify-between pt-1 border-t border-gray-100">
+                        <span className="text-gray-400 font-bold uppercase tracking-wide text-[9px]">Card/Wallet</span>
+                        <span className="font-bold text-blue-700 text-[10px]">{pd.cardType}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT col (2/3) */}
+              <div className="lg:col-span-2 space-y-4">
+
+                {/* Items */}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center gap-2">
+                    <ShoppingBag size={13} className="text-gray-400"/>
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Items ({order.items.length})</h4>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {order.items.map((item, i) => (
+                      <div key={i} className="flex gap-3 p-3 sm:p-4 hover:bg-gray-50/70 transition-colors">
+                        <div className="w-14 h-16 sm:w-16 sm:h-20 bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-200">
+                          <img src={item.image || '/placeholder.jpg'} alt={item.name} className="w-full h-full object-cover"/>
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm text-black truncate">{item.name}</p>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                {item.size && item.size !== 'STD' && (
+                                  <span className="bg-black text-white px-2 py-0.5 rounded text-[9px] font-black tracking-wider uppercase">
+                                    {item.size}
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-gray-500 font-bold">× {item.quantity}</span>
+                                {item.sku && <span className="text-[9px] font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 border border-gray-200">{item.sku}</span>}
+                              </div>
+                              {item.barcode && (
+                                <div className="mt-1 mix-blend-multiply opacity-70">
+                                  <Barcode value={item.barcode} width={0.9} height={14} fontSize={0} displayValue={false} margin={0}/>
+                                </div>
+                              )}
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="font-bodoni font-bold text-sm text-black"><Taka size={11}/>{fmt(item.price * item.quantity)}</p>
+                              {item.basePrice && item.basePrice !== item.price && (
+                                <p className="text-[9px] text-gray-400 line-through"><Taka size={8}/>{fmt(item.basePrice)}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action toolbar */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 bg-white p-3 sm:p-4 rounded-xl border border-gray-200 shadow-sm">
+
+                  {order.status === 'Pending' && (
+                    <>
+                      <button
+                        onClick={() => onFraudCheck(order.guestInfo)}
+                        className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                      >
+                        <ShieldAlert size={13}/> Risk Check
+                      </button>
+                      <ActionBtn onClick={() => onStatusChange(order._id, 'Processing')} icon={<Package size={13}/>} label="Approve" color="blue"/>
+                    </>
+                  )}
+
+                  {order.status === 'Processing' && (
+                    <>
+                      {!order.consignment_id ? (
+                        <ActionBtn
+                          onClick={() => onShip(order._id)}
+                          loading={shippingId === order._id}
+                          icon={<Send size={13}/>}
+                          label="Send to Courier"
+                          color="purple"
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 border border-gray-200 rounded-xl text-xs font-mono font-bold">
+                          <Truck size={13}/> {order.tracking_code}
+                        </div>
+                      )}
+                      <ActionBtn onClick={() => onStatusChange(order._id, 'Shipped')} icon={<Truck size={13}/>} label="Mark Shipped" color="purple"/>
+                    </>
+                  )}
+
+                  {order.status === 'Shipped' && (
+                    <ActionBtn onClick={() => onStatusChange(order._id, 'Delivered')} icon={<Check size={13}/>} label="Mark Delivered" color="green"/>
+                  )}
+
+                  {!['Cancelled', 'Delivered'].includes(order.status) && (
+                    <button
+                      onClick={() => onCancel(order._id)}
+                      className="ml-auto flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-[#800000] hover:bg-red-50 rounded-xl text-[10px] font-black uppercase tracking-widest border border-transparent hover:border-red-100 transition-colors"
+                    >
+                      <X size={13}/> Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ─── main page ────────────────────────────────────────────────────────────────
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [expandedOrderId, setExpandedOrderId] = useState(null);
-  
-  // Action States
+  const [paymentFilter, setPaymentFilter] = useState('All');
+  const [expanded, setExpanded] = useState(null);
   const [shippingId, setShippingId] = useState(null);
   const [bulkShipping, setBulkShipping] = useState(false);
+  const [cancelId, setCancelId] = useState(null);
+  const [fraudCustomer, setFraudCustomer] = useState(null);
 
-  // Modals
-  const [cancelOrderId, setCancelOrderId] = useState(null);
-  const [fraudCheckCustomer, setFraudCheckCustomer] = useState(null);
-
-  useEffect(() => { loadOrders(); }, []);
-
-  const loadOrders = async () => {
+  const load = async () => {
     const data = await getAdminOrders();
     setOrders(data);
     setLoading(false);
   };
+  useEffect(() => { load(); }, []);
 
-  const handleShipToSteadfast = async (id) => {
-      setShippingId(id);
-      try {
-          const res = await sendToSteadfast(id);
-          if(res.success) {
-              toast.success(`Shipped! Tracking: ${res.tracking_code}`);
-              loadOrders();
-          } else {
-              toast.error(res.error || "Failed to send");
-          }
-      } catch (e) {
-          toast.error("Network Error");
-      }
-      setShippingId(null);
+  const handleShip = async (id) => {
+    setShippingId(id);
+    try {
+      const res = await sendToSteadfast(id);
+      res.success ? toast.success(`Shipped! ${res.tracking_code}`) : toast.error(res.error || 'Failed');
+      load();
+    } catch { toast.error('Network error'); }
+    setShippingId(null);
   };
 
   const handleBulkShip = async () => {
-      if(!confirm("Send ALL 'Processing' orders to Steadfast?")) return;
-      setBulkShipping(true);
-      try {
-          const res = await bulkShipToSteadfast();
-          if(res.success) {
-              toast.success(`Shipped ${res.count || 'multiple'} orders.`);
-              loadOrders();
-          } else {
-              toast.error(res.error || "Bulk ship failed");
-          }
-      } catch(e) {
-          toast.error("Network Error");
-      }
-      setBulkShipping(false);
+    if (!confirm('Send ALL Processing orders to Steadfast?')) return;
+    setBulkShipping(true);
+    try {
+      const res = await bulkShipToSteadfast();
+      res.success ? toast.success(`Shipped ${res.count ?? ''} orders.`) : toast.error(res.error || 'Failed');
+      load();
+    } catch { toast.error('Network error'); }
+    setBulkShipping(false);
   };
 
-  const handleStatusChange = async (id, status, reason = null) => {
+  const handleStatus = async (id, status, reason = null) => {
     setOrders(prev => prev.map(o => o._id === id ? { ...o, status } : o));
     await updateOrderStatus(id, status, reason);
-    const data = await getAdminOrders();
-    setOrders(data);
+    load();
   };
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter(order => {
-      if (statusFilter !== 'All' && order.status !== statusFilter) return false;
-      const searchLower = searchTerm.toLowerCase();
-      const orderIdStr = order.orderId ? order.orderId.toString().toLowerCase() : '';
-      return orderIdStr.includes(searchLower) || 
-             (order.guestInfo?.firstName + ' ' + order.guestInfo?.lastName).toLowerCase().includes(searchLower) ||
-             order.guestInfo?.phone?.includes(searchLower);
-    });
-  }, [orders, searchTerm, statusFilter]);
+  const filtered = useMemo(() => orders.filter(o => {
+    if (statusFilter !== 'All' && o.status !== statusFilter) return false;
+    if (paymentFilter !== 'All' && o.paymentMethod !== paymentFilter) return false;
+    const q = search.toLowerCase();
+    if (!q) return true;
+    return (
+      o.orderId?.toLowerCase().includes(q) ||
+      `${o.guestInfo?.firstName} ${o.guestInfo?.lastName}`.toLowerCase().includes(q) ||
+      o.guestInfo?.phone?.includes(q)
+    );
+  }), [orders, search, statusFilter, paymentFilter]);
 
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case 'Pending': return 'bg-[#FDF6B2] text-[#723B13] border-[#FCE96A]'; // Warm Yellow
-      case 'Processing': return 'bg-[#E1EFFE] text-[#1E429F] border-[#B3D7FF]'; // Soft Blue
-      case 'Shipped': return 'bg-[#EDEBFE] text-[#5521B5] border-[#D4C6FF]'; // Purple
-      case 'Delivered': return 'bg-[#DEF7EC] text-[#03543F] border-[#84E1BC]'; // Green
-      case 'Cancelled': return 'bg-[#FDE8E8] text-[#9B1C1C] border-[#F8B4B4]'; // Red
-      default: return 'bg-gray-100 text-gray-600 border-gray-200';
-    }
-  };
+  // stats
+  const stats = useMemo(() => ({
+    total: orders.length,
+    pending: orders.filter(o => o.status === 'Pending').length,
+    processing: orders.filter(o => o.status === 'Processing').length,
+    delivered: orders.filter(o => o.status === 'Delivered').length,
+    revenue: orders.filter(o => o.status !== 'Cancelled').reduce((s, o) => s + (o.totalAmount ?? 0), 0),
+  }), [orders]);
 
   if (loading) return (
-    <div className="min-h-screen bg-[#faf9f6] flex items-center justify-center text-[#800000]">
-      <div className="flex flex-col items-center gap-4">
-         <Loader2 className="animate-spin" size={40}/>
-         <span className="text-xs uppercase tracking-widest font-bold text-gray-400">Loading Orders...</span>
-      </div>
+    <div className="min-h-screen bg-[#faf9f6] pt-16 lg:pt-0">
+      <AdminLoadingScreen label="Loading Orders…"/>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] font-manrope text-gray-900 w-full overflow-x-hidden pt-16 lg:pt-0">
-      
-      <CancelModal isOpen={!!cancelOrderId} onClose={() => setCancelOrderId(null)} onConfirm={(r) => { handleStatusChange(cancelOrderId, 'Cancelled', r); setCancelOrderId(null); }} />
-      <FraudCheckModal isOpen={!!fraudCheckCustomer} onClose={() => setFraudCheckCustomer(null)} customer={fraudCheckCustomer} />
+    <div className="min-h-screen bg-[#faf9f6] font-manrope text-gray-900 pt-16 lg:pt-0">
+      <AnimatePresence>
+        {cancelId && <CancelModal isOpen onClose={() => setCancelId(null)} onConfirm={(r) => { handleStatus(cancelId, 'Cancelled', r); setCancelId(null); }}/>}
+        {fraudCustomer && <FraudCheckModal isOpen onClose={() => setFraudCustomer(null)} customer={fraudCustomer}/>}
+      </AnimatePresence>
 
-      {/* --- HEADER --- */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm backdrop-blur-md bg-white/90">
-        <div className="w-full max-w-7xl mx-auto px-4 md:px-8 py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="font-bodoni text-3xl font-bold text-black">Orders</h1>
-            <div className="flex items-center gap-2 mt-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#800000]"></span>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                  {filteredOrders.length} Records Found
-                </p>
-            </div>
+      <AdminPageHeader eyebrow="Order Management" title="Orders" count={filtered.length} countLabel="orders">
+        <button
+          onClick={handleBulkShip}
+          disabled={bulkShipping}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#800000] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-[#800000]/20 disabled:opacity-50 hover:-translate-y-0.5 active:translate-y-0"
+        >
+          {bulkShipping ? <Loader2 size={13} className="animate-spin"/> : <Truck size={13}/>}
+          Bulk Courier
+        </button>
+      </AdminPageHeader>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-6">
+
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+          <AdminStatCard label="Total Orders" value={stats.total} icon={ShoppingBag} color="bg-gray-100 text-gray-600"/>
+          <AdminStatCard label="Pending" value={stats.pending} icon={Clock} color="bg-amber-100 text-amber-700" highlight={stats.pending > 0}/>
+          <AdminStatCard label="Processing" value={stats.processing} icon={Package} color="bg-blue-100 text-blue-700"/>
+          <AdminStatCard label="Delivered" value={stats.delivered} icon={Check} color="bg-green-100 text-green-700"/>
+          <AdminStatCard
+            label="Revenue" value={<span className="flex items-center"><Taka size={18}/>{fmt(stats.revenue)}</span>}
+            icon={Banknote} color="bg-[#800000]/10 text-[#800000]"
+            className="col-span-2 sm:col-span-1"
+          />
+        </div>
+
+        {/* Filters */}
+        <AdminFilterBar>
+          <AdminFilterRow>
+            <AdminSearchInput value={search} onChange={setSearch} placeholder="Search ID, Name, Phone…" className="sm:col-span-2"/>
+            <CustomSelect value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} placeholder="All Statuses"/>
+            <CustomSelect value={paymentFilter} onChange={setPaymentFilter} options={PAYMENT_OPTIONS} placeholder="All Methods"/>
+          </AdminFilterRow>
+        </AdminFilterBar>
+
+        {/* Orders */}
+        {filtered.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
+            <AdminEmptyState icon={Package} title="No orders found" subtitle="Try adjusting your filters"/>
           </div>
-          <button 
-            onClick={handleBulkShip} 
-            disabled={bulkShipping}
-            className="bg-[#800000] text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-[#800000]/20 disabled:opacity-50 disabled:shadow-none flex items-center gap-2 hover:-translate-y-0.5"
+        ) : (
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={{ visible: { transition: { staggerChildren: 0.04 } }, hidden: {} }}
+            className="space-y-3"
           >
-            {bulkShipping ? <Loader2 className="animate-spin" size={14}/> : <Truck size={14}/>}
-            Bulk Courier
-          </button>
-        </div>
-      </div>
-
-      {/* --- CONTENT AREA --- */}
-      <div className="w-full max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-6">
-        
-        {/* CONTROLS */}
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-gray-200">
-          <div className="relative w-full xl:w-96 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#800000] transition-colors" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search ID, Name, Phone..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-transparent text-sm font-medium focus:outline-none placeholder:text-gray-400"
-            />
-          </div>
-          
-          <div className="w-full xl:w-auto overflow-x-auto pb-2 xl:pb-0 px-2 no-scrollbar">
-            <div className="flex gap-2">
-              {['All', 'Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map(status => (
-                <button 
-                  key={status} 
-                  onClick={() => setStatusFilter(status)} 
-                  className={`px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap border ${
-                    statusFilter === status 
-                    ? 'bg-black text-white border-black shadow-md' 
-                    : 'bg-white text-gray-500 border-gray-100 hover:border-gray-300 hover:text-black'
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* --- ORDER CARDS (Responsive List) --- */}
-        <div className="space-y-4">
-           {filteredOrders.length === 0 ? (
-              <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-gray-300 bg-gray-50/50">
-                 <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-gray-100 mx-auto">
-                    <Package size={24} className="opacity-20 text-black" />
-                 </div>
-                 <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">No matching orders found</p>
-              </div>
-           ) : filteredOrders.map(order => (
-              <motion.div 
-                layout 
-                key={order._id} 
-                className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group"
+            {filtered.map(order => (
+              <motion.div
+                key={order._id}
+                variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
               >
-                 {/* MAIN ROW */}
-                 <div 
-                    className="p-5 flex flex-col lg:flex-row gap-6 lg:items-center cursor-pointer relative"
-                    onClick={() => setExpandedOrderId(expandedOrderId === order._id ? null : order._id)}
-                 >
-                    {/* Status Indicator Bar */}
-                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${order.status === 'Cancelled' ? 'bg-[#800000]' : order.status === 'Delivered' ? 'bg-green-600' : 'bg-[#D4AF37]'}`}></div>
-
-                    {/* ID & Status */}
-                    <div className="flex items-center gap-4 lg:w-1/4 pl-2">
-                       <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 group-hover:text-[#800000] transition-colors border border-gray-100">
-                          <Package size={18}/>
-                       </div>
-                       <div>
-                          <h3 className="font-mono font-bold text-sm text-black tracking-wide">{formatOrderId(order.orderId)}</h3>
-                          <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase border ${getStatusStyle(order.status)}`}>
-                             {order.status}
-                          </span>
-                       </div>
-                    </div>
-
-                    {/* Customer */}
-                    <div className="lg:w-1/4">
-                       <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
-                          <User size={14} className="text-[#D4AF37]"/>
-                          {order.guestInfo?.firstName} {order.guestInfo?.lastName}
-                       </div>
-                       <div className="text-[10px] text-gray-400 font-medium mt-1 pl-6 uppercase tracking-wider">
-                          {new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                       </div>
-                    </div>
-
-                    {/* Quick Stats / Items */}
-                    <div className="lg:w-1/4 flex items-center gap-8">
-                       <div>
-                          <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Items</p>
-                          <p className="font-bold text-sm text-gray-900">{order.items.length}</p>
-                       </div>
-                       <div>
-                          <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Total</p>
-                          <p className="font-bodoni font-bold text-lg text-[#800000] flex items-center gap-1"><Taka/>{order.totalAmount?.toLocaleString()}</p>
-                       </div>
-                    </div>
-
-                    {/* Expand Toggle */}
-                    <div className="ml-auto text-gray-300 group-hover:text-black transition-colors">
-                       {expandedOrderId === order._id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
-                    </div>
-                 </div>
-
-                 {/* EXPANDED DETAILS */}
-                 <AnimatePresence>
-                    {expandedOrderId === order._id && (
-                       <motion.div 
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.3, ease: "easeInOut" }}
-                          className="border-t border-gray-100 bg-[#faf9f6]/50"
-                       >
-                          <div className="p-6 lg:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
-                             
-                             {/* LEFT: INFO */}
-                             <div className="space-y-6">
-                                {/* Shipping Info */}
-                                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
-                                   <div className="absolute top-0 right-0 w-12 h-12 bg-gray-50 rounded-bl-full -mr-6 -mt-6"></div>
-                                   <div className="flex items-center gap-2 mb-4">
-                                      <MapPin size={16} className="text-[#800000]"/>
-                                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-black">Delivery Details</h4>
-                                   </div>
-                                   <div className="space-y-4 text-sm text-gray-600">
-                                      <div className="flex justify-between border-b border-gray-50 pb-2">
-                                         <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">Phone</span>
-                                         <span className="font-mono font-bold text-black tracking-wide">{order.guestInfo?.phone}</span>
-                                      </div>
-                                      <div className="pt-1">
-                                         <span className="text-[10px] text-gray-400 uppercase font-bold block mb-1 tracking-wide">Address</span>
-                                         <p className="leading-relaxed text-black text-xs font-medium bg-gray-50 p-3 rounded-lg border border-gray-100">{order.shippingAddress?.address}, {order.shippingAddress?.city}</p>
-                                      </div>
-                                   </div>
-                                </div>
-
-                                {/* Payment Breakdown */}
-                                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                                   <div className="flex items-center gap-2 mb-4">
-                                      <CreditCard size={16} className="text-[#800000]"/>
-                                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-black">Payment</h4>
-                                   </div>
-                                   <div className="space-y-3 text-sm">
-                                      <div className="flex justify-between text-gray-500 text-xs font-medium">
-                                         <span>Subtotal</span>
-                                         <span className="flex items-center gap-1 font-bold text-gray-800"><Taka/>{order.subTotal ? order.subTotal.toLocaleString() : order.totalAmount}</span>
-                                      </div>
-                                      <div className="flex justify-between text-gray-500 text-xs font-medium">
-                                         <span>Shipping</span>
-                                         <span className="flex items-center gap-1 font-bold text-gray-800"><Taka/>{order.shippingAddress?.method === 'outside' ? '150' : '80'}</span>
-                                      </div>
-                                      {order.discountAmount > 0 && (
-                                         <div className="flex justify-between text-[#800000] bg-red-50 p-2 rounded text-[10px] font-bold uppercase border border-red-100">
-                                            <span>Discount ({order.couponCode})</span>
-                                            <span className="flex items-center gap-1">-<Taka size={10}/>{order.discountAmount.toLocaleString()}</span>
-                                         </div>
-                                      )}
-                                      <div className="border-t border-dashed border-gray-200 pt-3 flex justify-between font-bold text-black text-base">
-                                         <span>Total Payable</span>
-                                         <span className="font-bodoni text-[#800000] flex items-center gap-1"><Taka size={16}/>{order.totalAmount.toLocaleString()}</span>
-                                      </div>
-                                   </div>
-                                </div>
-                             </div>
-
-                             {/* MIDDLE & RIGHT: ITEMS & ACTIONS */}
-                             <div className="xl:col-span-2 space-y-6">
-                                {/* Items */}
-                                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                                   <div className="bg-gray-50 px-5 py-3 border-b border-gray-200 flex items-center gap-2">
-                                      <ShoppingBag size={14} className="text-gray-400"/>
-                                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Order Items</h4>
-                                   </div>
-                                   <div className="divide-y divide-gray-100">
-                                      {order.items.map((item, i) => (
-                                         <div key={i} className="p-4 flex gap-4 hover:bg-gray-50 transition-colors">
-                                            <div className="w-16 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
-                                               <img src={item.image || '/placeholder.jpg'} className="w-full h-full object-cover"/>
-                                            </div>
-                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                               <div className="flex justify-between items-start">
-                                                  <div>
-                                                     <p className="font-bold text-sm text-black line-clamp-1">{item.name}</p>
-                                                     <div className="flex items-center gap-3 mt-1.5">
-                                                        <span className="bg-black text-white px-2 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase">Size: {item.size}</span>
-                                                        <span className="text-xs text-gray-500 font-bold">x {item.quantity}</span>
-                                                     </div>
-                                                  </div>
-                                                  <p className="font-bodoni font-bold text-base text-black flex items-center gap-1"><Taka/>{(item.price * item.quantity).toLocaleString()}</p>
-                                               </div>
-                                               {(item.sku || item.barcode) && (
-                                                  <div className="mt-2 flex gap-3 opacity-60 hover:opacity-100 transition-opacity">
-                                                     {item.sku && <span className="text-[10px] font-mono bg-gray-100 px-1.5 rounded text-black border border-gray-200 tracking-wide">{item.sku}</span>}
-                                                     {item.barcode && <div className="mix-blend-multiply opacity-80"><Barcode value={item.barcode} width={1} height={12} fontSize={0} displayValue={false} margin={0} /></div>}
-                                                  </div>
-                                               )}
-                                            </div>
-                                         </div>
-                                      ))}
-                                   </div>
-                                </div>
-
-                                {/* Action Toolbar */}
-                                <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                   
-                                   {/* Stage 1: Pending */}
-                                   {order.status === 'Pending' && (
-                                      <>
-                                         <button onClick={() => setFraudCheckCustomer(order.guestInfo)} className="flex items-center gap-2 px-4 py-2.5 bg-[#D4AF37]/10 text-[#D4AF37] hover:bg-[#D4AF37]/20 border border-[#D4AF37]/20 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
-                                            <ShieldAlert size={14}/> Risk Check
-                                         </button>
-                                         <ActionButton onClick={() => handleStatusChange(order._id, 'Processing')} icon={<Package size={14}/>} label="Approve & Process" color="blue" />
-                                      </>
-                                   )}
-
-                                   {/* Stage 2: Processing */}
-                                   {order.status === 'Processing' && (
-                                      <>
-                                         {!order.consignment_id ? (
-                                            <button onClick={() => handleShipToSteadfast(order._id)} disabled={shippingId === order._id} className="flex items-center gap-2 px-5 py-2.5 bg-[#800000] text-white hover:bg-black rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all shadow-md shadow-[#800000]/20 disabled:opacity-70 disabled:cursor-not-allowed">
-                                               {shippingId === order._id ? <Loader2 className="animate-spin" size={14}/> : <Send size={14}/>} 
-                                               Send to Courier
-                                            </button>
-                                         ) : (
-                                            <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg text-xs font-mono font-bold">
-                                               <Truck size={14}/> {order.tracking_code}
-                                            </div>
-                                         )}
-                                         <ActionButton onClick={() => handleStatusChange(order._id, 'Shipped')} icon={<Truck size={14}/>} label="Mark Shipped" color="purple" />
-                                      </>
-                                   )}
-
-                                   {/* Stage 3: Shipped */}
-                                   {order.status === 'Shipped' && (
-                                      <ActionButton onClick={() => handleStatusChange(order._id, 'Delivered')} icon={<Check size={14}/>} label="Mark Delivered" color="green" />
-                                   )}
-
-                                   {/* Common: Cancel */}
-                                   {order.status !== 'Cancelled' && order.status !== 'Delivered' && (
-                                      <button onClick={() => setCancelOrderId(order._id)} className="ml-auto px-4 py-2 text-[#800000] hover:bg-red-50 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-transparent hover:border-red-100 transition-colors flex items-center gap-2">
-                                         <X size={14}/> Cancel Order
-                                      </button>
-                                   )}
-                                </div>
-                             </div>
-
-                          </div>
-                       </motion.div>
-                    )}
-                 </AnimatePresence>
+                <OrderCard
+                  order={order}
+                  expanded={expanded === order._id}
+                  onToggle={() => setExpanded(expanded === order._id ? null : order._id)}
+                  onStatusChange={handleStatus}
+                  onFraudCheck={setFraudCustomer}
+                  onCancel={setCancelId}
+                  shippingId={shippingId}
+                  onShip={handleShip}
+                />
               </motion.div>
-           ))}
-        </div>
-
+            ))}
+          </motion.div>
+        )}
       </div>
     </div>
-  );
-}
-
-// Helper for Action Buttons
-function ActionButton({ onClick, icon, label, color }) {
-  const styles = { 
-     blue: 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200', 
-     purple: 'bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200', 
-     green: 'bg-green-50 text-green-700 hover:bg-green-100 border-green-200' 
-  };
-  return (
-     <button onClick={onClick} className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all border ${styles[color]}`}>
-        {icon} <span>{label}</span>
-     </button>
   );
 }

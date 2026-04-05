@@ -62,7 +62,7 @@ export default function SignupPage() {
         {/* HEADER */}
         <div className="text-center mb-8 flex flex-col items-center">
           <motion.div variants={itemVariants} className="relative w-24 h-12 mb-6">
-             <Image src="/logo.png" alt="OURA" fill className="object-contain" priority />
+             <Image src="/logo.png" alt="OURA" fill sizes="96px" className="object-contain" priority />
           </motion.div>
           <motion.span variants={itemVariants} className="font-bold text-[10px] uppercase tracking-[0.3em] text-[#B91C1C] mb-2 block">
             Membership

@@ -1,13 +1,21 @@
 'use server'
 
 import nodemailer from 'nodemailer';
+import { escapeHtml, sanitizeString, rateLimit } from '@/lib/security';
 
 // --- CONFIGURATION ---
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: false,
+  requireTLS: true,
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
+    type: 'login',
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASSWORD,
+  },
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
@@ -109,10 +117,19 @@ const generateUserEmail = (name, store, subject) => {
 // 🛠️ TEMPLATE 2: ADMIN NOTIFICATION (CLEAN DASHBOARD STYLE)
 // ==============================================================================
 const generateAdminEmail = (data) => {
-  const { name, company, email, phone, whatsapp, store, subject, details } = data;
-  
-  const waNumber = (whatsapp || phone).replace(/[^0-9]/g, '');
-  const waLink = `https://wa.me/${waNumber}?text=Hello ${name}, contacting from OURA regarding your appointment request.`;
+  // Escape all user-supplied values before inserting into HTML
+  const name     = escapeHtml(data.name || '');
+  const company  = escapeHtml(data.company || '');
+  const email    = escapeHtml(data.email || '');
+  const phone    = escapeHtml(data.phone || '');
+  const whatsapp = escapeHtml(data.whatsapp || '');
+  const store    = escapeHtml(data.store || '');
+  const subject  = escapeHtml(data.subject || '');
+  const details  = escapeHtml(data.details || '');
+
+  const waNumber = (data.whatsapp || data.phone).replace(/[^0-9]/g, '');
+  // Encode the text param to prevent URL injection
+  const waLink = `https://wa.me/${encodeURIComponent(waNumber)}?text=${encodeURIComponent(`Hello ${data.name}, contacting from OURA regarding your appointment request.`)}`;
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' });
 
   return `
@@ -195,6 +212,7 @@ const generateAdminEmail = (data) => {
         <span class="label">Additional Notes</span>
         <div class="message-box">
           ${details ? details.replace(/\n/g, '<br>') : 'No details provided.'}
+          <!-- details is already HTML-escaped above; newlines converted to <br> are safe -->
         </div>
       </div>
 
@@ -218,34 +236,52 @@ const generateAdminEmail = (data) => {
 // 🚀 MAIN SERVER ACTION
 // ==============================================================================
 export async function requestAppointment(formData) {
-  const { name, email, phone } = formData;
+  const name    = sanitizeString(formData.name, 100);
+  const email   = sanitizeString(formData.email, 200)?.toLowerCase();
+  const phone   = sanitizeString(formData.phone, 30);
+  const store   = sanitizeString(formData.store, 100);
+  const subject = sanitizeString(formData.subject, 200);
+  const details = sanitizeString(formData.details, 2000);
+  const company = sanitizeString(formData.company, 100);
+  const whatsapp = sanitizeString(formData.whatsapp, 30);
 
   if (!name || !email || !phone) {
-    return { success: false, message: "Please fill in all required fields." };
+    return { success: false, message: 'Please fill in all required fields.' };
   }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { success: false, message: 'Invalid email address.' };
+  }
+
+  // Rate-limit by email: max 3 requests per hour
+  try {
+    rateLimit(`appointment:${email}`, 3, 60 * 60 * 1000);
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+
+  const safeData = { name, company, email, phone, whatsapp, store, subject, details };
 
   try {
     const sendAdmin = transporter.sendMail({
-      from: `"OURA System" <${process.env.GMAIL_USER}>`,
+      from: `"OURA System" <${process.env.SMTP_USER}>`,
       to: process.env.ADMIN_EMAIL,
       replyTo: email,
-      subject: `[LEAD] ${name} - ${formData.store}`,
-      html: generateAdminEmail(formData),
+      subject: `[LEAD] ${name} - ${store}`,
+      html: generateAdminEmail(safeData),
     });
 
     const sendUser = transporter.sendMail({
-      from: `"OURA Concierge" <${process.env.GMAIL_USER}>`,
+      from: `"OURA Concierge" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: `Received: Your Appointment Request at ${formData.store}`,
-      html: generateUserEmail(name, formData.store, formData.subject),
+      subject: `Received: Your Appointment Request at ${store}`,
+      html: generateUserEmail(name, store, subject),
     });
 
     await Promise.all([sendAdmin, sendUser]);
-
-    return { success: true, message: "Concierge request sent successfully." };
-
+    return { success: true, message: 'Concierge request sent successfully.' };
   } catch (error) {
-    console.error("Email Error:", error);
-    return { success: false, message: "Server error. Please try again." };
+    console.error('Email Error:', error);
+    return { success: false, message: 'Server error. Please try again.' };
   }
 }

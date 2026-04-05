@@ -1,15 +1,18 @@
-import { Settings } from 'lucide-react';
+import { getShopSettings } from '@/actions/settings';
+import ShopSettingsClient from '@/components/admin/ShopSettingsClient';
 
-export default function SettingsPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function SettingsPage() {
+  const shopSettings = await getShopSettings();
+
   return (
-    <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6">
-      <div className="bg-gray-100 p-6 rounded-2xl mb-6">
-        <Settings size={48} className="text-gray-600" />
+    <div className="p-6 max-w-3xl mx-auto space-y-8">
+      <div className="border-b border-gray-200 pb-4">
+        <h1 className="text-2xl font-bold text-gray-900">Shop Settings</h1>
+        <p className="text-sm text-gray-500 mt-1">Manage delivery pricing and payment methods.</p>
       </div>
-      <h2 className="text-2xl font-bold text-gray-900 font-classic">System Settings</h2>
-      <p className="text-gray-500 max-w-md mt-2">
-        Manage your admin password and site SEO configurations here.
-      </p>
+      <ShopSettingsClient initialSettings={shopSettings} />
     </div>
   );
 }

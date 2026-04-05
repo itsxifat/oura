@@ -5,6 +5,19 @@ import Image from 'next/image';
 import connectDB from '@/lib/db';
 import SiteContent from '@/models/SiteContent';
 
+export const metadata = {
+  title: 'Collections',
+  description: 'Browse all OURA collections — curated luxury menswear engineered for the modern aesthetic. Shop T-Shirts, Polos, and exclusive drops in Bangladesh.',
+  alternates: { canonical: 'https://oura-lifestyle.com/category' },
+  openGraph: {
+    type: 'website',
+    title: 'The Collections | OURA',
+    description: 'Curated luxury menswear engineered for the modern aesthetic. Browse all OURA collections.',
+    url: 'https://oura-lifestyle.com/category',
+    images: [{ url: 'https://oura-lifestyle.com/logo.png', width: 400, height: 400, alt: 'OURA Collections' }],
+  },
+};
+
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +53,7 @@ export default async function AllCategoriesPage() {
 
         {/* --- CATEGORIES GRID --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-1 md:gap-4">
-          {categories.map((cat) => (
+          {categories.map((cat, idx) => (
             <Link
               key={cat._id}
               href={`/category/${cat.slug}`}
@@ -55,7 +68,8 @@ export default async function AllCategoriesPage() {
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                   className="object-cover transition-transform duration-[1.2s] ease-[cubic-bezier(0.25,0.46,0.45,0.94)] group-hover:scale-110 will-change-transform opacity-90 group-hover:opacity-100"
                   quality={85}
-                  priority={false}
+                  priority={idx === 0}
+                  loading={idx === 0 ? 'eager' : 'lazy'}
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-neutral-900 text-neutral-700">

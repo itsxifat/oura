@@ -67,8 +67,9 @@ export default function LoginPage() {
              <Image 
                src="/logo.png" 
                alt="OURA" 
-               fill 
-               className="object-contain" 
+               fill
+               sizes="96px"
+               className="object-contain"
                priority
              />
           </div>

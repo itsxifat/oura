@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useMemo } from 'react';
 // ✅ IMPORT EVERYTHING FROM ONE PLACE
-import { getUserOrders, submitReview, getOrderReview } from '@/app/actions'; 
-import { CheckCircle, XCircle, Clock, ShoppingBag, Loader2, MapPin, Receipt, Ticket, Zap, ScanLine, Star, PenLine, Send, X, AlertCircle, Search, Filter, ChevronDown } from 'lucide-react';
+import { getUserOrders, submitReview, getOrderReview } from '@/app/actions';
+import { CheckCircle, XCircle, Clock, ShoppingBag, Loader2, MapPin, Receipt, Ticket, Zap, ScanLine, Star, PenLine, Send, X, AlertCircle, Search, Filter, ChevronDown, ArrowRight, CreditCard, Banknote, CheckCircle2, AlertTriangle, Hash, Phone, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -265,9 +265,19 @@ export default function OrdersClient() {
               <span className="text-[10px] font-black uppercase tracking-[0.25em] text-[#B91C1C] block mb-2">My Collection</span>
               <h1 className="font-heading font-black text-4xl md:text-6xl text-black uppercase tracking-tighter leading-none">Order History</h1>
            </div>
-           <div className="text-right">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Total Orders</span>
-              <p className="text-2xl font-black text-black leading-none">{orders.length}</p>
+           <div className="flex items-end gap-6">
+              <div className="text-right">
+                 <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Total Orders</span>
+                 <p className="text-2xl font-black text-black leading-none">{orders.length}</p>
+              </div>
+              <Link
+                href="/"
+                className="flex items-center gap-2 bg-black text-white px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#B91C1C] transition-colors group flex-shrink-0"
+              >
+                <ShoppingBag size={13} />
+                <span>Continue Shopping</span>
+                <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+              </Link>
            </div>
         </div>
 
@@ -320,17 +330,32 @@ export default function OrdersClient() {
              <div className="w-20 h-20 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-neutral-200">
                 <ShoppingBag size={24} className="text-neutral-300" strokeWidth={1.5}/>
              </div>
-             <h2 className="font-heading font-black text-2xl text-black uppercase mb-2">No Matching Orders</h2>
-             <button onClick={() => { setSearchQuery(''); setFilterStatus('All'); setPriceRange({min:'', max:''}); setDateRange({start:'', end:''}); }} className="text-[10px] font-bold uppercase tracking-widest text-[#B91C1C] border-b border-[#B91C1C] pb-0.5">
-                Clear All Filters
-             </button>
+             <h2 className="font-heading font-black text-2xl text-black uppercase mb-4">
+               {orders.length === 0 ? 'No Orders Yet' : 'No Matching Orders'}
+             </h2>
+             {orders.length > 0 ? (
+               <button onClick={() => { setSearchQuery(''); setFilterStatus('All'); setPriceRange({min:'', max:''}); setDateRange({start:'', end:''}); }} className="text-[10px] font-bold uppercase tracking-widest text-[#B91C1C] border-b border-[#B91C1C] pb-0.5">
+                 Clear All Filters
+               </button>
+             ) : (
+               <Link href="/" className="inline-flex items-center gap-2 bg-black text-white px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#B91C1C] transition-colors group">
+                 <ShoppingBag size={13} />
+                 Start Shopping
+                 <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+               </Link>
+             )}
            </motion.div>
         ) : (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
             {filteredOrders.map(order => {
-              const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-              const shipping = order.shippingAddress?.method === 'outside' ? 150 : 80;
-              const hasDiscount = order.totalAmount < (subtotal + shipping);
+              const subtotal     = order.subTotal ?? order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+              const shipping     = order.shippingFee ?? (order.shippingAddress?.method === 'outside' ? 150 : 80);
+              const discount     = order.discountAmount ?? 0;
+              const hasDiscount  = discount > 0;
+              const isPaid       = order.paymentStatus === 'Paid';
+              const isPrePaid    = isPaid && (order.paymentMethod === 'bKash' || order.paymentMethod === 'SSLCommerz');
+              const dueAmount    = isPaid ? 0 : order.totalAmount ?? 0;
+              const pd           = order.paymentDetails; // gateway payload
 
               return (
                 <motion.div key={order._id} variants={itemVariants} className="bg-white border border-neutral-200 group hover:border-neutral-400 transition-colors shadow-sm overflow-hidden">
@@ -432,36 +457,162 @@ export default function OrdersClient() {
                   </div>
 
                   {/* --- FOOTER INFO --- */}
-                  <div className="bg-neutral-50/30 border-t border-neutral-100 p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div>
-                      <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#B91C1C] mb-4 flex items-center gap-2"><MapPin size={12}/> Destination</h5>
-                      <div className="text-xs font-medium text-neutral-600 leading-relaxed pl-4 border-l-2 border-neutral-200">
-                        <p className="font-bold text-black uppercase">{order.guestInfo?.firstName} {order.guestInfo?.lastName}</p>
-                        <p>{order.shippingAddress?.address || order.guestInfo?.address}</p>
-                        <p>{order.shippingAddress?.city}, {order.shippingAddress?.postalCode}</p>
-                        <p className="mt-2 font-mono text-neutral-400">{order.guestInfo?.phone}</p>
+                  <div className="border-t border-neutral-100">
+
+                    {/* Address + Order Summary row */}
+                    <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Destination */}
+                      <div>
+                        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#B91C1C] mb-4 flex items-center gap-2"><MapPin size={12}/> Destination</h5>
+                        <div className="text-xs font-medium text-neutral-600 leading-relaxed pl-4 border-l-2 border-neutral-200">
+                          <p className="font-bold text-black uppercase">{order.guestInfo?.firstName} {order.guestInfo?.lastName}</p>
+                          <p>{order.shippingAddress?.address || order.guestInfo?.address}</p>
+                          <p>{order.shippingAddress?.city}{order.shippingAddress?.postalCode ? `, ${order.shippingAddress.postalCode}` : ''}</p>
+                          <p className="mt-2 font-mono text-neutral-400">{order.guestInfo?.phone}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div>
+
+                      {/* Order Summary */}
+                      <div>
                         <div className="bg-white p-5 border border-neutral-200 shadow-sm">
-                           {hasDiscount && (
-                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wide text-[#B91C1C] border-b border-dashed border-neutral-200 pb-3 mb-3">
-                                <span className="flex items-center gap-1">{order.couponCode ? <Ticket size={12}/> : <Zap size={12}/>}{order.couponCode ? `Coupon: ${order.couponCode}` : 'Discount Applied'}</span>
-                                <span>Active</span>
-                             </div>
-                           )}
-                           <div className="space-y-2 mb-4">
-                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-neutral-500"><span>Subtotal</span><span className="text-black"><Taka size={10}/> {subtotal.toLocaleString()}</span></div>
-                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-neutral-500"><span>Shipping</span><span className="text-black"><Taka size={10}/> {shipping.toLocaleString()}</span></div>
-                           </div>
-                           <div className="flex justify-between items-center pt-3 border-t-2 border-black">
-                              <span className="text-xs font-black text-black uppercase tracking-widest">Total Paid</span>
-                              <span className="font-heading font-black text-2xl text-black flex items-center gap-1"><Taka size={18}/> {order.totalAmount?.toLocaleString()}</span>
-                           </div>
+                          {hasDiscount && (
+                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wide text-[#B91C1C] border-b border-dashed border-neutral-200 pb-3 mb-3">
+                              <span className="flex items-center gap-1">{order.couponCode ? <Ticket size={12}/> : <Zap size={12}/>}{order.couponCode ? `Coupon: ${order.couponCode}` : 'Discount Applied'}</span>
+                              <span>−<Taka size={10}/>{discount.toLocaleString()}</span>
+                            </div>
+                          )}
+                          <div className="space-y-2 mb-4">
+                            <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-neutral-500"><span>Subtotal</span><span className="text-black"><Taka size={10}/> {subtotal.toLocaleString()}</span></div>
+                            <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-neutral-500"><span>Shipping</span><span className="text-black"><Taka size={10}/> {shipping.toLocaleString()}</span></div>
+                          </div>
+                          <div className="flex justify-between items-center pt-3 border-t-2 border-black">
+                            <span className="text-xs font-black text-black uppercase tracking-widest">Order Total</span>
+                            <span className="font-heading font-black text-2xl text-black flex items-center gap-1"><Taka size={18}/> {order.totalAmount?.toLocaleString()}</span>
+                          </div>
+                          {/* Paid / Due row */}
+                          <div className={`mt-3 flex justify-between items-center text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded ${isPaid ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                            <span className="flex items-center gap-1.5">
+                              {isPaid ? <CheckCircle2 size={11}/> : <AlertTriangle size={11}/>}
+                              {isPaid ? (isPrePaid ? 'Paid Online' : 'Payment Received') : 'Due on Delivery'}
+                            </span>
+                            <span>{isPaid ? `৳0 Due` : `৳${dueAmount.toLocaleString()}`}</span>
+                          </div>
                         </div>
                         <div className="mt-4 flex justify-end">
-                           <button onClick={() => setSelectedInvoiceOrder(order)} className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] border border-black px-5 py-3 hover:bg-black hover:text-white transition-all"><Receipt size={12} /> View Invoice</button>
+                          <button onClick={() => setSelectedInvoiceOrder(order)} className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] border border-black px-5 py-3 hover:bg-black hover:text-white transition-all"><Receipt size={12} /> View Invoice</button>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Details strip */}
+                    <div className="border-t border-neutral-100 bg-neutral-50/60 px-6 md:px-8 py-5">
+                      <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-4 flex items-center gap-2">
+                        <CreditCard size={11}/> Payment Details
+                      </h5>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+                        {/* Method */}
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Method</p>
+                          {order.paymentMethod === 'bKash' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-black bg-[#fdf0f6] text-[#E2136E] border border-[#E2136E]/20">
+                              <span className="w-3 h-3 rounded-full bg-[#E2136E] inline-block"/>bKash
+                            </span>
+                          ) : order.paymentMethod === 'SSLCommerz' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-200">
+                              <span className="w-3 h-3 rounded-full bg-blue-600 inline-block"/>SSL Commerz
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-black bg-neutral-100 text-neutral-600 border border-neutral-200">
+                              <Banknote size={11}/>Cash on Delivery
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Status */}
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Status</p>
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-black border ${isPaid ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                            {isPaid ? <CheckCircle2 size={11}/> : <Clock size={11}/>}
+                            {isPaid ? 'Paid' : 'Pending'}
+                          </span>
+                        </div>
+
+                        {/* Transaction ID */}
+                        {order.paymentTransactionId && (
+                          <div className="col-span-2 md:col-span-1">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1 flex items-center gap-1"><Hash size={9}/> Transaction ID</p>
+                            <p className="text-[10px] font-mono font-bold text-black break-all">{order.paymentTransactionId}</p>
+                          </div>
+                        )}
+
+                        {/* Gateway-specific details */}
+                        {pd?.gateway === 'bKash' && (
+                          <>
+                            {pd.customerMsisdn && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1 flex items-center gap-1"><Phone size={9}/> bKash Number</p>
+                                <p className="text-[10px] font-mono font-bold text-[#E2136E]">{pd.customerMsisdn}</p>
+                              </div>
+                            )}
+                            {pd.paymentExecuteTime && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1 flex items-center gap-1"><Calendar size={9}/> Paid At</p>
+                                <p className="text-[10px] font-mono text-neutral-600">{new Date(pd.paymentExecuteTime).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</p>
+                              </div>
+                            )}
+                            {pd.transactionStatus && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Gateway Status</p>
+                                <p className="text-[10px] font-bold text-green-700 uppercase">{pd.transactionStatus}</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {pd?.gateway === 'SSLCommerz' && (
+                          <>
+                            {pd.cardType && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Card / Wallet</p>
+                                <p className="text-[10px] font-bold text-blue-700">{pd.cardType}</p>
+                              </div>
+                            )}
+                            {pd.cardNo && pd.cardNo !== 'null' && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Card No.</p>
+                                <p className="text-[10px] font-mono font-bold text-neutral-700">{pd.cardNo}</p>
+                              </div>
+                            )}
+                            {pd.bankTranId && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1 flex items-center gap-1"><Hash size={9}/> Bank Tran ID</p>
+                                <p className="text-[10px] font-mono font-bold text-black break-all">{pd.bankTranId}</p>
+                              </div>
+                            )}
+                            {pd.tranDate && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1 flex items-center gap-1"><Calendar size={9}/> Paid At</p>
+                                <p className="text-[10px] font-mono text-neutral-600">{pd.tranDate}</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* COD — show due if not yet paid */}
+                        {order.paymentMethod === 'COD' && !isPaid && (
+                          <div className="col-span-2">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Amount Due on Delivery</p>
+                            <p className="text-sm font-black text-amber-700 flex items-center gap-1"><Taka size={13}/> {order.totalAmount?.toLocaleString()}</p>
+                          </div>
+                        )}
+                        {order.paymentMethod === 'COD' && isPaid && (
+                          <div className="col-span-2">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Collected on Delivery</p>
+                            <p className="text-sm font-black text-green-700 flex items-center gap-1"><CheckCircle2 size={13}/><Taka size={13}/> {order.totalAmount?.toLocaleString()}</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </motion.div>

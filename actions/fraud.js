@@ -3,7 +3,8 @@
 import connectDB from '@/lib/db';
 import Order from '@/models/Order';
 import SteadfastAccount from '@/models/SteadfastAccount';
-import { performLogin } from './steadfastAuth'; // Auto-Login Logic
+import { performLogin } from './steadfastAuth';
+import { assertAdmin, escapeRegex } from '@/lib/security';
 
 // --- CONFIG ---
 const STEADFAST_CHECK_URL = (phone) => `https://www.steadfast.com.bd/user/frauds/check/${phone}`;
@@ -62,7 +63,12 @@ function calculateRisk(internal, steadfast) {
 
 // --- MAIN ACTION ---
 export async function checkFraud(phoneNumber) {
-  const phone = phoneNumber.replace(/[^0-9]/g, "").slice(-11);
+  // Only admin can run fraud checks
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
+
+  if (!phoneNumber || typeof phoneNumber !== 'string') return { error: 'Invalid phone' };
+  const phone = phoneNumber.replace(/[^0-9]/g, '').slice(-11);
+  if (phone.length < 7) return { error: 'Invalid phone number' };
 
   const stats = {
     internal: { total: 0, delivered: 0, returned: 0 },
@@ -72,7 +78,8 @@ export async function checkFraud(phoneNumber) {
   // 1. INTERNAL CHECK
   try {
     await connectDB();
-    const orders = await Order.find({ "guestInfo.phone": { $regex: phone } }).select('status').lean();
+    const safePhone = escapeRegex(phone);
+    const orders = await Order.find({ 'guestInfo.phone': { $regex: safePhone } }).select('status').lean();
     stats.internal.total = orders.length;
     stats.internal.delivered = orders.filter(o => o.status === 'Delivered').length;
     stats.internal.returned = orders.filter(o => o.status === 'Returned' || o.status === 'Cancelled').length;

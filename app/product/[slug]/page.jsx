@@ -29,14 +29,32 @@ const connectDB = async () => {
 
 export async function generateMetadata({ params }) {
   await connectDB();
-  const { slug } = await params; 
-  const product = await Product.findOne({ slug: decodeURIComponent(slug) }).select('name description images');
-  if (!product) return { title: 'Product Not Found | OURA' };
+  const { slug } = await params;
+  const product = await Product.findOne({ slug: decodeURIComponent(slug) }).select('name description images price discountPrice');
+  if (!product) return { title: 'Product Not Found' };
+
+  const description = product.description?.substring(0, 160) || `Shop ${product.name} at OURA — premium fashion engineered for the modern aesthetic.`;
+  const image = product.images?.[0] ? { url: product.images[0], width: 800, height: 1000, alt: product.name } : null;
+  const url = `https://oura-lifestyle.com/product/${slug}`;
 
   return {
-    title: `${product.name} | OURA`,
-    description: product.description?.substring(0, 160),
-    openGraph: { images: product.images?.[0] ? [{ url: product.images[0] }] : [] },
+    title: product.name,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: 'website',
+      siteName: 'OURA',
+      title: product.name,
+      description,
+      url,
+      images: image ? [image] : [],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: product.name,
+      description,
+      images: image ? [image.url] : [],
+    },
   };
 }
 
@@ -100,14 +118,44 @@ export default async function ProductPage({ params }) {
   // 4. Serialize Data
   const serializedProduct = JSON.parse(JSON.stringify(product));
 
+  const base = 'https://oura-lifestyle.com';
+  const price = serializedProduct.discountPrice || serializedProduct.price;
+  const totalStock = serializedProduct.variants?.reduce((sum, v) => sum + (v.stock || 0), 0) ?? serializedProduct.stock ?? 0;
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: serializedProduct.name,
+    description: serializedProduct.description,
+    image: serializedProduct.images || [],
+    url: `${base}/product/${serializedProduct.slug}`,
+    brand: { '@type': 'Brand', name: 'OURA' },
+    offers: {
+      '@type': 'Offer',
+      priceCurrency: 'BDT',
+      price,
+      availability: totalStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url: `${base}/product/${serializedProduct.slug}`,
+      seller: { '@type': 'Organization', name: 'OURA' },
+    },
+    ...(serializedProduct.reviews?.length > 0 && {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: (serializedProduct.reviews.reduce((a, b) => a + b.rating, 0) / serializedProduct.reviews.length).toFixed(1),
+        reviewCount: serializedProduct.reviews.length,
+      },
+    }),
+  };
+
   return (
     <div className="bg-[#faf9f6] min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <Navbar navData={navData} />
-      
+
       {/* Main Component */}
-      <ProductDetails 
-         product={serializedProduct} 
-         orderCount={orderCount} // ✅ Pass the calculated count
+      <ProductDetails
+         product={serializedProduct}
+         orderCount={orderCount}
       />
 
       {/* Recommendations */}

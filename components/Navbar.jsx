@@ -5,8 +5,9 @@ import { ShoppingBag, Menu, Search, User, LogOut, ArrowRight, X, ChevronDown, Ch
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signOut } from "next-auth/react";
-import { useCart } from '@/lib/context/CartContext'; 
+import { useCart } from '@/lib/context/CartContext';
 import { usePathname } from 'next/navigation';
+import SearchModal from '@/components/SearchModal';
 
 // --- ANIMATION VARIANTS (Snappier & More Professional) ---
 const menuVariants = {
@@ -154,9 +155,10 @@ const Navbar = ({ navData }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState(null);
-  const [profileOpen, setProfileOpen] = useState(false); 
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const leaveTimeout = useRef(null);
-  const profileRef = useRef(null); 
+  const profileRef = useRef(null);
   const [mounted, setMounted] = useState(false);
 
   const isProductPage = pathname === '/products';
@@ -177,6 +179,18 @@ const Navbar = ({ navData }) => {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // ⌘K / Ctrl+K global shortcut
+  useEffect(() => {
+    function handleGlobalKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    document.addEventListener('keydown', handleGlobalKey);
+    return () => document.removeEventListener('keydown', handleGlobalKey);
   }, []);
 
   const handleMouseEnter = (link) => {
@@ -215,10 +229,22 @@ const Navbar = ({ navData }) => {
               <button className="lg:hidden p-1 -ml-1 hover:bg-gray-50 rounded-md transition text-gray-800" onClick={() => setMobileMenuOpen(true)}>
                 <Menu size={20} strokeWidth={1} />
               </button>
-              <div className="hidden lg:flex items-center gap-2 cursor-pointer text-gray-500 hover:text-black transition-colors group">
-                <Search size={16} strokeWidth={1.5} />
-                <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.2em] group-hover:underline decoration-[#B91C1C] underline-offset-4">Search</span>
-              </div>
+              {/* Desktop search pill */}
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="hidden lg:flex items-center gap-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-gray-300 rounded-full px-4 py-2 transition-all duration-200 group w-52 xl:w-64"
+              >
+                <Search size={14} strokeWidth={1.5} className="text-gray-400 group-hover:text-[#B91C1C] transition-colors shrink-0" />
+                <span className="font-sans text-[11px] text-gray-400 group-hover:text-gray-600 transition-colors flex-1 text-left tracking-wide">Search products…</span>
+                <kbd className="text-[9px] font-mono text-gray-300 border border-gray-200 bg-white rounded px-1.5 py-0.5 shrink-0 hidden xl:block">⌘K</kbd>
+              </button>
+              {/* Mobile search icon */}
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="lg:hidden p-1.5 hover:bg-gray-50 rounded-full transition text-gray-600 hover:text-black"
+              >
+                <Search size={18} strokeWidth={1.5} />
+              </button>
             </div>
 
             {/* Center: LOGO (Scaled Down for elegance) */}
@@ -352,6 +378,7 @@ const Navbar = ({ navData }) => {
       </motion.nav>
 
       <MobileMenu isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} navData={navData} session={session} />
+      <SearchModal isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );
 };

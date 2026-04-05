@@ -4,10 +4,10 @@ import Link from 'next/link';
 import Image from 'next/image'; // Import Next.js Image
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { 
-  LayoutDashboard, Images, Settings, Monitor, Menu, X, 
-  Layers, Users, ShoppingBag, Package, Ticket, Tag, 
-  LogOut as SignOutIcon
+import {
+  LayoutDashboard, Images, Settings, Monitor, Menu, X,
+  Layers, Users, ShoppingBag, Package, Ticket, Tag, Search,
+  Sparkles, LogOut as SignOutIcon, Receipt,
 } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,14 +16,17 @@ const SidebarContent = ({ activePath, onClickItem }) => {
   const menuItems = [
     { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/orders', label: 'Orders', icon: Package },
-    { href: '/admin/products', label: 'Products', icon: ShoppingBag }, 
-    { href: '/admin/tags', label: 'Product Tags', icon: Tag }, 
+    { href: '/admin/invoices', label: 'Invoices', icon: Receipt },
+    { href: '/admin/products', label: 'Products', icon: ShoppingBag },
+    { href: '/admin/tags', label: 'Product Tags', icon: Tag },
     { href: '/admin/sizes', label: 'Size', icon: Settings },
     { href: '/admin/settings/cookies', label: 'Cookies', icon: Settings },
     { href: '/admin/categories', label: 'Categories', icon: Layers },
     { href: '/admin/coupons', label: 'Coupons', icon: Ticket },
     { href: '/admin/carousel', label: 'Carousel Studio', icon: Images },
+    { href: '/admin/recommended', label: 'Recommended', icon: Sparkles },
     { href: '/admin/users', label: 'User Management', icon: Users },
+    { href: '/admin/search', label: 'Search', icon: Search },
     { href: '/admin/navbar', label: 'Navigation', icon: Monitor },
     { href: '/admin/settings', label: 'Settings', icon: Settings },
   ];
@@ -44,10 +47,11 @@ const SidebarContent = ({ activePath, onClickItem }) => {
              <Image 
                src="/logo.png" 
                alt="OURA" 
-               fill 
-               className="object-contain" 
-               style={{ filter: whiteFilter }} 
-               priority 
+               fill
+               sizes="96px"
+               className="object-contain"
+               style={{ filter: whiteFilter }}
+               priority
              />
           </div>
           <div className="flex items-center gap-2">
@@ -132,9 +136,10 @@ export default function AdminSidebar() {
            <Image 
              src="/logo.png" 
              alt="OURA" 
-             fill 
-             className="object-contain" 
-             style={{ filter: maroonFilter }} 
+             fill
+             sizes="80px"
+             className="object-contain"
+             style={{ filter: maroonFilter }}
              priority 
            />
         </div>

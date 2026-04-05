@@ -48,7 +48,7 @@ function ResetForm() {
         {/* Header */}
         <motion.div variants={itemVariants} className="text-center mb-10 flex flex-col items-center">
           <div className="relative w-20 h-10 mb-6">
-             <Image src="/logo.png" alt="OURA" fill className="object-contain" priority />
+             <Image src="/logo.png" alt="OURA" fill sizes="80px" className="object-contain" priority />
           </div>
           <span className="font-bold text-[10px] uppercase tracking-[0.3em] text-[#B91C1C] mb-2 block">Security Update</span>
           <h1 className="text-3xl md:text-4xl font-bodoni text-black">New Password</h1>

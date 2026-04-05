@@ -225,7 +225,7 @@ export default function CartClient() {
       </div>
       <h1 className="font-heading font-black text-3xl uppercase tracking-tight mb-2 text-black">Your Bag is Empty</h1>
       <p className="text-xs text-neutral-500 mb-8 uppercase tracking-widest">Start curating your wardrobe.</p>
-      <Link href="/categories" className="px-8 py-3 bg-black text-white text-[10px] font-bold uppercase tracking-[0.25em] hover:bg-[#B91C1C] transition-colors">
+      <Link href="/category" className="px-8 py-3 bg-black text-white text-[10px] font-bold uppercase tracking-[0.25em] hover:bg-[#B91C1C] transition-colors">
         View Collections
       </Link>
     </div>
@@ -350,7 +350,7 @@ export default function CartClient() {
               </Link>
               
               <div className="mt-4 text-center">
-                <Link href="/categories" className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400 hover:text-black border-b border-transparent hover:border-black transition-all">
+                <Link href="/category" className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400 hover:text-black border-b border-transparent hover:border-black transition-all">
                   Continue Shopping
                 </Link>
               </div>

@@ -3,8 +3,7 @@
 import connectDB from '@/lib/db';
 import Product from '@/models/Product';
 import UserInterest from '@/models/UserInterest';
-// Ensure Tag model is registered if explicit import is needed, 
-// usually mongoose handles this via string ref 'Tag' if model is compiled elsewhere.
+import GlobalSetting from '@/models/GlobalSetting';
 import { cookies } from 'next/headers';
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/auth';
@@ -94,19 +93,46 @@ export async function getRecommendedProducts() {
     excludeIds = products.map(p => p._id);
   }
 
-  // 4. Fallback: Fill with Best Sellers / New Arrivals if recommendations are few
+  // 4. Fallback: Use admin-selected default products if user has no/few recommendations
   if (products.length < 5) {
-    const bestSellers = await Product.find({ 
+    // Try admin-curated defaults first
+    const setting = await GlobalSetting.findOne({ identifier: 'default_recommended_products' }).lean();
+    const defaultIds = setting?.value?.productIds || [];
+
+    if (defaultIds.length > 0) {
+      const needed = 10 - products.length;
+      const adminDefaults = await Product.find({
+        _id: { $in: defaultIds, $nin: excludeIds },
+        stock: { $gt: 0 }
+      })
+        .populate('category')
+        .populate('tags')
+        .lean();
+
+      // Preserve admin-defined order
+      const orderedDefaults = defaultIds
+        .map(id => adminDefaults.find(p => p._id.toString() === id.toString()))
+        .filter(Boolean)
+        .slice(0, needed);
+
+      products = [...products, ...orderedDefaults];
+    }
+
+    // If still not enough, fill with newest products
+    if (products.length < 5) {
+      excludeIds = products.map(p => p._id);
+      const newest = await Product.find({
         _id: { $nin: excludeIds },
         stock: { $gt: 0 }
       })
-      .sort({ createdAt: -1 }) // Or sort by views/sales if you have those fields
-      .limit(10 - products.length)
-      .populate('category')
-      .populate('tags') // <--- FIX: Ensure fallback items also have tags
-      .lean();
-      
-    products = [...products, ...bestSellers];
+        .sort({ createdAt: -1 })
+        .limit(10 - products.length)
+        .populate('category')
+        .populate('tags')
+        .lean();
+
+      products = [...products, ...newest];
+    }
   }
 
   // 5. Clean up data for Next.js Server Components

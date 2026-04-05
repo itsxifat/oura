@@ -54,8 +54,9 @@ export default function ForgotPasswordPage() {
              <Image 
                src="/logo.png" 
                alt="OURA" 
-               fill 
-               className="object-contain" 
+               fill
+               sizes="80px"
+               className="object-contain"
                priority
              />
           </div>

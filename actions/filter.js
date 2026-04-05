@@ -3,7 +3,20 @@
 import connectDB from '@/lib/db';
 import Category from '@/models/Category';
 import Product from '@/models/Product';
-// Make sure you import other models if your file uses them
+import { escapeRegex, sanitizeString } from '@/lib/security';
+
+// Recursively collects all descendant category IDs (including the given ID itself)
+async function getAllDescendantIds(categoryId, allCategories) {
+  const ids = [categoryId];
+  const children = allCategories.filter(
+    (c) => c.parent && c.parent.toString() === categoryId.toString()
+  );
+  for (const child of children) {
+    const childIds = await getAllDescendantIds(child._id, allCategories);
+    ids.push(...childIds);
+  }
+  return ids;
+}
 
 export async function getCategoryPageData(slug, filters = {}) {
   await connectDB();
@@ -12,29 +25,36 @@ export async function getCategoryPageData(slug, filters = {}) {
   const mainCategory = await Category.findOne({ slug }).lean();
   if (!mainCategory) return null;
 
-  // 2. Find Child Categories (Sub-Categories)
-  const subCategories = await Category.find({ parentCategory: mainCategory._id }).lean();
-  const subCatIds = subCategories.map(c => c._id);
-  
+  // 2. Load all categories once, then resolve descendants in memory
+  const allCategories = await Category.find({}).lean();
+
+  // Direct children of the current category (for sections)
+  const subCategories = allCategories.filter(
+    (c) => c.parent && c.parent.toString() === mainCategory._id.toString()
+  );
+
   // 3. Filter Setup
   const min = filters.minPrice ? Number(filters.minPrice) : 0;
   const max = filters.maxPrice ? Number(filters.maxPrice) : Infinity;
   const now = new Date();
 
   // --- QUERY LOGIC ---
-  const buildProductQuery = (catId) => {
+  // catIds can be a single id or an array of ids
+  const buildProductQuery = (catIds) => {
     const query = {
-      category: catId,
+      category: Array.isArray(catIds) ? { $in: catIds } : catIds,
       // Optional: Ensure stock > 0
-      // stock: { $gt: 0 } 
+      // stock: { $gt: 0 }
     };
 
-    // A. Advanced Search (Name or Tags)
+    // A. Advanced Search — escape input to prevent ReDoS and injection
     if (filters.search) {
-      query.$or = [
-         { name: { $regex: filters.search, $options: 'i' } },
-         { tags: { $regex: filters.search, $options: 'i' } } // Assuming tag names are stored or populated
-      ];
+      const safeSearch = escapeRegex(sanitizeString(filters.search, 100));
+      if (safeSearch) {
+        query.$or = [
+          { name: { $regex: safeSearch, $options: 'i' } },
+        ];
+      }
     }
 
     // B. Advanced Price Filter (Complex)
@@ -78,18 +98,20 @@ export async function getCategoryPageData(slug, filters = {}) {
     return query;
   };
 
-  // 4. Fetch Products for Main Category
+  // 4. Fetch Products for Main Category (only direct products, not from sub-categories)
   const mainProducts = await Product.find(buildProductQuery(mainCategory._id))
     .sort({ createdAt: -1 })
     .populate('category')
-    .populate('tags') // Populate tags for badge display
+    .populate('tags')
     .lean();
 
-  // 5. Fetch Products for Each Sub-Category
+  // 5. Fetch Products for Each Sub-Category (including all their descendants)
   const sections = await Promise.all(subCategories.map(async (sub) => {
-    const products = await Product.find(buildProductQuery(sub._id))
+    // Get all descendant IDs so products from nested sub-categories are included
+    const descendantIds = await getAllDescendantIds(sub._id, allCategories);
+    const products = await Product.find(buildProductQuery(descendantIds))
       .sort({ createdAt: -1 })
-      .limit(8) // Limit sub-section display
+      .limit(8)
       .populate('category')
       .populate('tags')
       .lean();
@@ -107,4 +129,10 @@ export async function getCategoryPageData(slug, filters = {}) {
     mainProducts: JSON.parse(JSON.stringify(mainProducts)),
     sections: sections.filter(s => s.products.length > 0) // Only return sections with products
   };
+}
+
+export async function getTopCategories() {
+  await connectDB();
+  const categories = await Category.find({ parent: null }).lean();
+  return JSON.parse(JSON.stringify(categories));
 }

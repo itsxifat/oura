@@ -77,7 +77,7 @@ function VerifyForm() {
       {/* Header with Logo */}
       <motion.div variants={itemVariants} className="flex flex-col items-center mb-8">
          <div className="relative w-20 h-10 mb-6">
-            <Image src="/logo.png" alt="OURA" fill className="object-contain" priority />
+            <Image src="/logo.png" alt="OURA" fill sizes="80px" className="object-contain" priority />
          </div>
          <div className="w-14 h-14 bg-[#B91C1C]/5 text-[#B91C1C] rounded-full flex items-center justify-center shadow-sm border border-[#B91C1C]/10 mb-4">
             <ShieldCheck size={28} strokeWidth={1.5} />

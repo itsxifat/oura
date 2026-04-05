@@ -1,288 +1,260 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { getTags, createTag, deleteTag, getProductsByTag } from '@/app/actions';
-import { Tag as TagIcon, Plus, Trash2, Package, Loader2, ArrowRight, X, Image as ImageIcon, Search } from 'lucide-react';
+import { Tag as TagIcon, Plus, Trash2, Package, Loader2, X, Image as ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import gsap from 'gsap';
+import Link from 'next/link';
+import {
+  Taka, AdminPageHeader, AdminLoadingScreen, AdminEmptyState, AdminCard,
+} from '@/app/admin/components/AdminUI';
 
-// --- TAKA SVG COMPONENT ---
-const Taka = ({ size = 12, className = "", weight = "normal" }) => (
-  <svg width={size} height={size+2} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={`inline-block align-middle ${className}`}>
-    <text x="50%" y="55%" dominantBaseline="middle" textAnchor="middle" fontSize="20" fontWeight={weight === 'bold' ? 'bold' : 'normal'} fill="currentColor" style={{ fontFamily: "var(--font-heading)" }}>৳</text>
-  </svg>
-);
+const fmt = (n) => Number(n ?? 0).toLocaleString('en-BD');
 
 export default function TagsPage() {
-  const containerRef = useRef(null);
-  const [tags, setTags] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [productsInTag, setProductsInTag] = useState([]);
-  const [selectedTag, setSelectedTag] = useState(null);
-  const [productsLoading, setProductsLoading] = useState(false);
-  
-  // Create State
-  const [newTagName, setNewTagName] = useState('');
-  const [newTagColor, setNewTagColor] = useState('#800000'); // Default Maroon
-  const [creating, setCreating] = useState(false);
+  const [tags, setTags]                   = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [selectedTag, setSelectedTag]     = useState(null);
+  const [products, setProducts]           = useState([]);
+  const [prodsLoading, setProdsLoading]   = useState(false);
+  const [newName, setNewName]             = useState('');
+  const [newColor, setNewColor]           = useState('#800000');
+  const [creating, setCreating]           = useState(false);
+  const [deletingId, setDeletingId]       = useState(null);
 
-  useEffect(() => {
-    loadTags();
-  }, []);
-
-  // Animate Entry
-  useEffect(() => {
-    if (!loading && containerRef.current) {
-        gsap.fromTo(".anim-entry", 
-            { opacity: 0, y: 20 }, 
-            { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: "power2.out" }
-        );
-    }
-  }, [loading]);
-
-  async function loadTags() {
+  const load = async () => {
     const data = await getTags();
     setTags(data);
     setLoading(false);
-  }
+  };
+  useEffect(() => { load(); }, []);
 
-  async function handleCreate(e) {
+  const handleCreate = async (e) => {
     e.preventDefault();
-    if(!newTagName) return;
+    if (!newName.trim()) return;
     setCreating(true);
-    const formData = new FormData();
-    formData.append('name', newTagName);
-    formData.append('color', newTagColor);
-    await createTag(formData);
-    setNewTagName('');
-    await loadTags();
+    const fd = new FormData();
+    fd.append('name', newName.trim());
+    fd.append('color', newColor);
+    await createTag(fd);
+    setNewName('');
+    await load();
     setCreating(false);
-  }
+  };
 
-  async function handleDelete(id) {
-    if(!confirm("Delete this tag? Products will not be deleted, just untagged.")) return;
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this tag? Products will be untagged but not deleted.')) return;
+    setDeletingId(id);
     await deleteTag(id);
-    await loadTags();
-    if(selectedTag?._id === id) setSelectedTag(null);
-  }
+    if (selectedTag?._id === id) { setSelectedTag(null); setProducts([]); }
+    await load();
+    setDeletingId(null);
+  };
 
-  async function handleSelectTag(tag) {
+  const selectTag = async (tag) => {
     setSelectedTag(tag);
-    setProductsLoading(true);
-    setProductsInTag([]); // Clear previous
+    setProdsLoading(true);
+    setProducts([]);
     const prods = await getProductsByTag(tag._id);
-    setProductsInTag(prods);
-    setProductsLoading(false);
-  }
+    setProducts(prods);
+    setProdsLoading(false);
+  };
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#faf9f6] pt-16 lg:pt-0">
+      <AdminLoadingScreen label="Loading Tags…"/>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] text-gray-900 font-manrope p-4 md:p-8 pt-24 lg:pt-8" ref={containerRef}>
-      <div className="max-w-7xl mx-auto">
-        
-        {/* --- HEADER --- */}
-        <div className="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-gray-200 pb-6">
-          <div>
-            <span className="text-[#800000] font-bold uppercase tracking-[0.3em] text-[10px]">Organization</span>
-            <h1 className="font-bodoni text-4xl mt-2 text-black">Product Tags</h1>
-            <p className="text-gray-400 text-xs mt-2 font-medium tracking-wide">Manage labels for grouping products (e.g., Sale, New Arrival).</p>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#faf9f6] font-manrope text-gray-900 pt-16 lg:pt-0">
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* LEFT: TAG LIST & CREATE (4 Columns) */}
-          <div className="lg:col-span-4 space-y-8">
-             
-             {/* Create Form */}
-             <div className="anim-entry bg-white p-6 rounded-2xl shadow-sm border border-gray-200 relative overflow-hidden group">
-                {/* Decorative Corner */}
-                <div className="absolute top-0 right-0 w-20 h-20 bg-[#800000]/5 rounded-bl-full -mr-8 -mt-8 pointer-events-none transition-all group-hover:bg-[#800000]/10"></div>
-                
-                <h3 className="font-bold text-xs uppercase tracking-widest mb-6 text-gray-900 flex items-center gap-2">
-                   <Plus size={14} className="text-[#800000]"/> Create New Tag
-                </h3>
-                
-                <form onSubmit={handleCreate} className="space-y-5">
-                   <div>
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Tag Name</label>
-                      <input 
-                        value={newTagName}
-                        onChange={(e) => setNewTagName(e.target.value)}
-                        className="w-full p-3 bg-gray-50 rounded-xl text-sm font-medium outline-none border border-transparent focus:bg-white focus:border-[#800000] transition-all placeholder:text-gray-300"
-                        placeholder="e.g. Summer Sale"
+      <AdminPageHeader eyebrow="Organization" title="Product Tags" count={tags.length} countLabel="tags"/>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+          {/* ── Left: create + tag list ── */}
+          <div className="lg:col-span-4 space-y-4">
+
+            {/* Create form */}
+            <AdminCard>
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-700 mb-4 flex items-center gap-2">
+                <Plus size={12} className="text-[#800000]"/> New Tag
+              </h3>
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5 block">Tag Name</label>
+                  <input
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    placeholder="e.g. Summer Sale"
+                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium outline-none focus:border-[#800000]/40 focus:bg-white transition-all placeholder:text-gray-300"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5 block">Badge Color</label>
+                  <div className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-gray-300 shadow-sm shrink-0">
+                      <input
+                        type="color"
+                        value={newColor}
+                        onChange={e => setNewColor(e.target.value)}
+                        className="absolute inset-[-50%] w-[200%] h-[200%] cursor-pointer border-0 p-0 m-0"
                       />
-                   </div>
-                   
-                   <div>
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Badge Color</label>
-                      <div className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl border border-gray-100">
-                         <div className="relative w-8 h-8 rounded-lg overflow-hidden shadow-sm border border-gray-200">
-                            <input 
-                              type="color" 
-                              value={newTagColor}
-                              onChange={(e) => setNewTagColor(e.target.value)}
-                              className="absolute inset-[-50%] w-[200%] h-[200%] cursor-pointer border-0 p-0 m-0"
-                            />
-                         </div>
-                         <span className="text-xs font-mono text-gray-500 uppercase">{newTagColor}</span>
-                      </div>
-                   </div>
-
-                   <button 
-                     disabled={creating} 
-                     className="w-full bg-[#800000] text-white py-3.5 rounded-xl text-xs font-bold uppercase tracking-[0.2em] hover:bg-black disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#800000]/20"
-                   >
-                      {creating ? <Loader2 className="animate-spin" size={14}/> : <Plus size={14}/>} 
-                      {creating ? 'Creating...' : 'Create Tag'}
-                   </button>
-                </form>
-             </div>
-
-             {/* Tag List */}
-             <div className="space-y-3">
-                <h3 className="font-bold text-xs uppercase tracking-widest text-gray-400 px-2">Active Tags</h3>
-                {loading && (
-                    <div className="text-center py-8">
-                         <div className="w-6 h-6 border-2 border-[#800000] border-t-transparent rounded-full animate-spin mx-auto"/>
                     </div>
-                )}
-                {!loading && tags.length === 0 && (
-                   <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
-                      <TagIcon size={24} className="mx-auto mb-2 opacity-20"/>
-                      <span className="text-[10px] uppercase font-bold">No tags found</span>
-                   </div>
-                )}
-                {tags.map(tag => (
-                   <motion.div 
-                     layoutId={tag._id}
-                     key={tag._id} 
-                     onClick={() => handleSelectTag(tag)}
-                     className={`anim-entry group relative flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all border 
-                        ${selectedTag?._id === tag._id 
-                           ? 'bg-white border-[#800000] shadow-md ring-1 ring-[#800000]/20 z-10' 
-                           : 'bg-white border-gray-100 hover:border-gray-300 hover:shadow-sm'
-                        }`}
-                   >
-                      <div className="flex items-center gap-4">
-                         <div 
-                           className="w-3 h-3 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)] ring-2 ring-white" 
-                           style={{ backgroundColor: tag.color }}
-                         ></div>
-                         <span className={`font-bold text-sm transition-colors ${selectedTag?._id === tag._id ? 'text-[#800000]' : 'text-gray-600 group-hover:text-black'}`}>
-                            {tag.name}
-                         </span>
+                    <span
+                      className="flex-1 text-xs font-black uppercase px-2.5 py-1 rounded-lg border"
+                      style={{ backgroundColor: `${newColor}18`, color: newColor, borderColor: `${newColor}30` }}
+                    >
+                      {newName || 'Preview'}
+                    </span>
+                    <span className="text-[10px] font-mono text-gray-400">{newColor}</span>
+                  </div>
+                </div>
+                <button
+                  disabled={creating || !newName.trim()}
+                  className="w-full bg-[#800000] text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#800000]/20"
+                >
+                  {creating ? <Loader2 size={13} className="animate-spin"/> : <Plus size={13}/>}
+                  {creating ? 'Creating…' : 'Create Tag'}
+                </button>
+              </form>
+            </AdminCard>
+
+            {/* Tag list */}
+            <AdminCard noPad>
+              <div className="px-4 py-3 border-b border-gray-100">
+                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Active Tags ({tags.length})</p>
+              </div>
+              {tags.length === 0 ? (
+                <div className="py-10 text-center">
+                  <TagIcon size={24} className="mx-auto text-gray-200 mb-2"/>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">No tags yet</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {tags.map(tag => (
+                    <motion.div
+                      key={tag._id}
+                      onClick={() => selectTag(tag)}
+                      className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-all group
+                        ${selectedTag?._id === tag._id ? 'bg-[#800000]/5 border-l-2 border-[#800000]' : 'hover:bg-gray-50 border-l-2 border-transparent'}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-3 h-3 rounded-full shrink-0 ring-2 ring-white shadow" style={{ backgroundColor: tag.color }}/>
+                        <span
+                          className={`font-bold text-sm truncate transition-colors
+                            ${selectedTag?._id === tag._id ? 'text-[#800000]' : 'text-gray-700 group-hover:text-black'}`}
+                        >
+                          {tag.name}
+                        </span>
                       </div>
-                      
-                      <div className="flex items-center gap-2">
-                         {selectedTag?._id === tag._id && (
-                            <motion.span initial={{scale:0}} animate={{scale:1}} className="text-[#800000]">
-                               <ArrowRight size={14}/>
-                            </motion.span>
-                         )}
-                         <button 
-                           onClick={(e) => { e.stopPropagation(); handleDelete(tag._id); }}
-                           className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
-                           title="Delete Tag"
-                         >
-                            <Trash2 size={14}/>
-                         </button>
-                      </div>
-                   </motion.div>
-                ))}
-             </div>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDelete(tag._id); }}
+                        disabled={deletingId === tag._id}
+                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 shrink-0 disabled:opacity-40"
+                      >
+                        {deletingId === tag._id ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
+                      </button>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </AdminCard>
           </div>
 
-          {/* RIGHT: PRODUCTS IN TAG (8 Columns) */}
+          {/* ── Right: products in tag ── */}
           <div className="lg:col-span-8">
-             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 min-h-[600px] flex flex-col h-full overflow-hidden relative">
-                
-                {/* Background Pattern */}
-                <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '24px 24px'}}></div>
+            <AdminCard noPad className="min-h-[400px] lg:min-h-[600px] flex flex-col">
 
-                {selectedTag ? (
-                   <motion.div 
-                     initial={{opacity:0}} animate={{opacity:1}} 
-                     className="flex-1 flex flex-col relative z-10"
-                   >
-                      {/* Tag Header */}
-                      <div className="p-8 border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-20">
-                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                               <div className="w-10 h-10 rounded-xl shadow-lg ring-4 ring-white flex items-center justify-center text-white font-bold text-lg" style={{ backgroundColor: selectedTag.color }}>
-                                 <TagIcon size={18}/>
-                               </div>
-                               <div>
-                                  <h2 className="font-bodoni text-3xl text-black leading-none">{selectedTag.name}</h2>
-                                  <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1.5 font-bold">Tagged Inventory</p>
-                               </div>
-                            </div>
-                            <div className="bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest shadow-lg">
-                               {productsInTag.length} Items
-                            </div>
-                         </div>
+              {selectedTag ? (
+                <>
+                  {/* Tag header */}
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-md shrink-0"
+                        style={{ backgroundColor: selectedTag.color }}
+                      >
+                        <TagIcon size={16}/>
                       </div>
+                      <div>
+                        <h2 className="font-bodoni text-xl text-black leading-none">{selectedTag.name}</h2>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mt-0.5">Tagged Inventory</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="bg-gray-900 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                        {prodsLoading ? '…' : `${products.length} items`}
+                      </span>
+                      <button
+                        onClick={() => { setSelectedTag(null); setProducts([]); }}
+                        className="p-2 rounded-xl text-gray-400 hover:text-black hover:bg-gray-100 transition-colors"
+                      >
+                        <X size={15}/>
+                      </button>
+                    </div>
+                  </div>
 
-                      {/* Product Grid */}
-                      <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-4 content-start overflow-y-auto max-h-[800px] scrollbar-thin scrollbar-thumb-gray-200">
-                         
-                         {productsLoading ? (
-                             <div className="col-span-full py-20 flex justify-center">
-                                 <div className="w-8 h-8 border-2 border-[#800000] border-t-transparent rounded-full animate-spin"/>
-                             </div>
-                         ) : (
-                             <AnimatePresence mode="popLayout">
-                                {productsInTag.map((prod, i) => (
-                                   <motion.div 
-                                     initial={{ opacity: 0, scale: 0.95 }}
-                                     animate={{ opacity: 1, scale: 1 }}
-                                     transition={{ delay: i * 0.05 }}
-                                     key={prod._id} 
-                                     className="group flex gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-[#800000] hover:shadow-md transition-all duration-300"
-                                   >
-                                      <div className="w-20 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 relative">
-                                         {prod.images?.[0] ? (
-                                            <img src={prod.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"/>
-                                         ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={20}/></div>
-                                         )}
-                                      </div>
-                                      <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                         <h4 className="font-bold text-sm text-gray-900 truncate group-hover:text-[#800000] transition-colors">{prod.name}</h4>
-                                         <p className="text-[10px] text-gray-400 font-mono mt-1">{prod.sku || 'NO SKU'}</p>
-                                         <div className="mt-2 flex items-center justify-between">
-                                            <span className="font-bold text-xs flex items-center gap-1"><Taka/>{prod.price?.toLocaleString()}</span>
-                                            <Link href={`/admin/products/${prod._id}`} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-[#800000] hover:underline">
-                                                Edit
-                                            </Link>
-                                         </div>
-                                      </div>
-                                   </motion.div>
-                                ))}
-                             </AnimatePresence>
-                         )}
-
-                         {!productsLoading && productsInTag.length === 0 && (
-                            <div className="col-span-full py-32 text-center flex flex-col items-center justify-center text-gray-400">
-                               <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                                  <Package size={24} className="opacity-30"/>
-                               </div>
-                               <p className="text-xs uppercase tracking-widest font-bold">No products tagged yet</p>
-                               <p className="text-[10px] mt-1">Go to the Products page to assign this tag.</p>
-                            </div>
-                         )}
+                  {/* Product grid */}
+                  <div className="flex-1 p-4 sm:p-5 overflow-y-auto custom-scrollbar">
+                    {prodsLoading ? (
+                      <div className="flex justify-center py-16">
+                        <Loader2 size={28} className="animate-spin text-[#800000]"/>
                       </div>
-                   </motion.div>
-                ) : (
-                   /* Empty Selection State */
-                   <div className="h-full flex flex-col items-center justify-center text-gray-300 p-8 text-center relative z-10">
-                      <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6">
-                         <TagIcon size={40} className="opacity-20 text-gray-400"/>
+                    ) : products.length === 0 ? (
+                      <AdminEmptyState
+                        icon={Package}
+                        title="No products tagged"
+                        subtitle="Go to Products to assign this tag"
+                      />
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <AnimatePresence mode="popLayout">
+                          {products.map((p, i) => (
+                            <motion.div
+                              key={p._id}
+                              initial={{ opacity: 0, scale: 0.96 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: i * 0.04 }}
+                              className="flex gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-200 hover:border-[#800000]/30 hover:bg-white hover:shadow-md transition-all group"
+                            >
+                              <div className="w-14 h-18 bg-gray-200 rounded-lg overflow-hidden shrink-0 border border-gray-200">
+                                {p.images?.[0]
+                                  ? <img src={p.images[0]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
+                                  : <div className="w-full h-full flex items-center justify-center text-gray-400"><ImageIcon size={16}/></div>}
+                              </div>
+                              <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                <p className="font-bold text-sm text-gray-900 truncate group-hover:text-[#800000] transition-colors">{p.name}</p>
+                                <p className="text-[10px] font-mono text-gray-400 mt-0.5">{p.sku || '—'}</p>
+                                <div className="flex items-center justify-between mt-2">
+                                  <span className="font-bold text-xs text-[#800000]"><Taka size={10}/>{fmt(p.price)}</span>
+                                  <Link href={`/admin/products/${p._id}`}
+                                    className="text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-[#800000] transition-colors"
+                                  >
+                                    Edit →
+                                  </Link>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
                       </div>
-                      <h3 className="text-lg font-bodoni text-gray-400 mb-2">No Tag Selected</h3>
-                      <p className="text-xs uppercase tracking-widest font-bold opacity-60">Select a tag from the left to view products</p>
-                   </div>
-                )}
-             </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                /* Empty selection */
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-center">
+                  <div className="w-20 h-20 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-center mx-auto mb-5">
+                    <TagIcon size={32} className="text-gray-200"/>
+                  </div>
+                  <p className="font-bodoni text-xl text-gray-400 mb-1">Select a Tag</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">Choose a tag from the left to view its products</p>
+                </div>
+              )}
+            </AdminCard>
           </div>
 
         </div>

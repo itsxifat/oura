@@ -42,10 +42,10 @@ const orderSchema = new mongoose.Schema(
         barcode: String, 
       },
     ],
-    // ✅ ADDED: These fields allow you to show the math properly in Admin
-    subTotal: Number,      
-    discountAmount: Number, 
-    
+    subTotal: Number,
+    discountAmount: Number,
+    shippingFee: { type: Number, default: 0 },
+
     totalAmount: Number,
     couponCode: String,
     status: {
@@ -55,7 +55,11 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: { type: String, default: "COD" },
     paymentStatus: { type: String, default: "Pending" },
+    paymentTransactionId: { type: String, default: null },
+    // Gateway-specific payment details stored at callback time
+    paymentDetails: { type: mongoose.Schema.Types.Mixed, default: null },
     orderId: { type: String, unique: true },
+    invoiceNumber: { type: String, unique: true, sparse: true },
     
     // Optional: For the Fraud Check feature later
     isHighRisk: { type: Boolean, default: false },

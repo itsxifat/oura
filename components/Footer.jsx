@@ -99,8 +99,9 @@ export default function Footer() {
                     <Image 
                         src="/logo.png" 
                         alt="OURA" 
-                        fill 
-                        className="object-contain object-left filter brightness-0 invert" 
+                        fill
+                        sizes="(max-width: 1535px) 128px, 192px"
+                        className="object-contain object-left filter brightness-0 invert"
                     />
                 </div>
              </div>

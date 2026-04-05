@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Star, Minus, Plus, ChevronRight, ShoppingBag, X, Ruler, ZoomIn, Check, AlertCircle, ChevronDown, ChevronUp, ChevronLeft, ArrowRight } from 'lucide-react';
+import { Star, Minus, Plus, ChevronRight, ShoppingBag, X, Ruler, ZoomIn, Check, AlertCircle, ChevronDown, ChevronUp, ChevronLeft, ArrowRight, Loader2 } from 'lucide-react';
 import { useCart } from '@/lib/context/CartContext'; 
 import Image from 'next/image'; 
 import gsap from 'gsap';
@@ -365,12 +365,13 @@ export default function ProductDetails({ product, orderCount = 0 }) {
           )}
 
           <div className="flex-1 relative anim-mask bg-neutral-50 overflow-hidden cursor-zoom-in group aspect-[4/5] shadow-sm border border-neutral-100" onClick={() => setLightboxOpen(true)}>
-            <Image 
-              src={product.images?.[activeImage] || '/placeholder.jpg'} 
-              alt={product.name} 
+            <Image
+              src={product.images?.[activeImage] || '/placeholder.jpg'}
+              alt={product.name}
               fill
               className="object-cover transition-transform duration-700 will-change-transform group-hover:scale-105"
               priority
+              loading="eager"
               quality={95}
               sizes="(max-width: 768px) 100vw, 50vw"
             />

@@ -6,6 +6,7 @@ import Category from '@/models/Category';
 import Tag from '@/models/Tag';
 import { saveFileToPublic, deleteFileFromPublic } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
+import { assertAdmin, sanitizeString, isValidObjectId } from '@/lib/security';
 
 // --- HELPER FUNCTIONS ---
 function generateSlug(text) {
@@ -18,24 +19,17 @@ function generateSlug(text) {
 }
 
 function generateCode(prefix = "OL") {
-  const randomPart = Math.floor(100000 + Math.random() * 900000); 
+  const randomPart = Math.floor(100000 + Math.random() * 900000);
   return `${prefix}-${randomPart}`;
 }
 
-// --- OFFER EXPIRY CHECKER (NEW HELPER) ---
 async function checkAndResetOffer(product) {
   if (!product.saleEndDate) return product;
-
   const now = new Date();
-  const endDate = new Date(product.saleEndDate);
-
-  if (now > endDate) {
-    // Offer Expired: Reset DB fields
+  if (now > new Date(product.saleEndDate)) {
     await Product.findByIdAndUpdate(product._id, {
       $unset: { discountPrice: "", saleStartDate: "", saleEndDate: "" }
     });
-    
-    // Return modified object immediately for UI consistency
     product.discountPrice = null;
     product.saleStartDate = null;
     product.saleEndDate = null;
@@ -43,7 +37,7 @@ async function checkAndResetOffer(product) {
   return product;
 }
 
-// --- TAGS ---
+// --- TAGS (admin-only writes) ---
 export async function getTags() {
   await connectDB();
   const tags = await Tag.find().sort({ createdAt: -1 }).lean();
@@ -51,10 +45,12 @@ export async function getTags() {
 }
 
 export async function createTag(formData) {
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
   await connectDB();
   try {
-    const name = formData.get('name');
-    const color = formData.get('color');
+    const name = sanitizeString(formData.get('name'), 100);
+    if (!name) return { error: 'Tag name is required' };
+    const color = sanitizeString(formData.get('color'), 20);
     const slug = generateSlug(name);
     await Tag.create({ name, slug, color });
     revalidatePath('/admin/tags');
@@ -63,6 +59,8 @@ export async function createTag(formData) {
 }
 
 export async function deleteTag(id) {
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
+  if (!isValidObjectId(id)) return { error: 'Invalid ID' };
   await connectDB();
   try {
     await Tag.findByIdAndDelete(id);
@@ -73,69 +71,35 @@ export async function deleteTag(id) {
 }
 
 export async function getProductsByTag(tagId) {
+  if (!isValidObjectId(tagId)) return [];
   await connectDB();
   const products = await Product.find({ tags: tagId }).select('name price images sku').lean();
   return JSON.parse(JSON.stringify(products));
 }
 
-// --- CATEGORIES ---
+// --- CATEGORIES (admin-only writes) ---
 export async function createCategory(formData) {
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
   await connectDB();
-  const name = formData.get('name');
+  const name = sanitizeString(formData.get('name'), 100);
+  if (!name) return { error: 'Category name is required' };
   const parentId = formData.get('parentId') || null;
-  const imageFile = formData.get('image'); 
+  if (parentId && !isValidObjectId(parentId)) return { error: 'Invalid parent ID' };
+  const imageFile = formData.get('image');
   const slug = name.toLowerCase().replace(/ /g, '-');
 
   try {
     let imagePath = null;
     if (imageFile && imageFile.size > 0) imagePath = await saveFileToPublic(imageFile);
     await Category.create({ name, slug, parent: parentId, image: imagePath });
-    revalidatePath('/admin/categories'); revalidatePath('/admin/navbar'); revalidatePath('/categories'); 
+    revalidatePath('/admin/categories'); revalidatePath('/admin/navbar'); revalidatePath('/category');
     return { success: true };
   } catch (error) { return { error: 'Failed to create category' }; }
 }
 
-export async function getCategoryPageData(slug, searchParams = {}) {
-  await connectDB();
-  try {
-    const mainCategory = await Category.findOne({ slug }).lean();
-    if (!mainCategory) return null;
-    const subCategoriesRaw = await Category.find({ parent: mainCategory._id }).lean();
-    
-    let productFilter = {};
-    if (searchParams.search) productFilter.name = { $regex: searchParams.search, $options: 'i' };
-    if (searchParams.minPrice || searchParams.maxPrice) {
-      productFilter.price = {};
-      if (searchParams.minPrice) productFilter.price.$gte = Number(searchParams.minPrice);
-      if (searchParams.maxPrice) productFilter.price.$lte = Number(searchParams.maxPrice);
-    }
-
-    const sections = await Promise.all(subCategoriesRaw.map(async (sub) => {
-      let products = await Product.find({ category: sub._id, ...productFilter })
-      .limit(12).sort({ createdAt: -1 }).lean();
-      
-      // Check Offers
-      products = await Promise.all(products.map(checkAndResetOffer));
-
-      return { ...sub, _id: sub._id.toString(), products: JSON.parse(JSON.stringify(products)) };
-    }));
-
-    let mainProducts = await Product.find({ category: mainCategory._id, ...productFilter }).limit(12).lean();
-    
-    // Check Offers
-    mainProducts = await Promise.all(mainProducts.map(checkAndResetOffer));
-
-    return { mainCategory: JSON.parse(JSON.stringify(mainCategory)), sections, mainProducts: JSON.parse(JSON.stringify(mainProducts)) };
-  } catch (error) { return null; }
-}
-
-export async function getTopCategories() {
-  await connectDB();
-  const categories = await Category.find({ parent: null }).lean();
-  return JSON.parse(JSON.stringify(categories));
-}
-
 export async function deleteCategory(id) {
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
+  if (!isValidObjectId(id)) return { error: 'Invalid ID' };
   await connectDB();
   await Category.findByIdAndDelete(id);
   revalidatePath('/admin/categories');
@@ -148,7 +112,7 @@ export async function getCategories() {
   const categories = JSON.parse(JSON.stringify(categoriesRaw));
   const buildTree = (cats, parentId = null) => {
     return cats.filter(c => String(c.parent) === String(parentId)).map(c => ({
-        ...c, _id: c._id.toString(), children: buildTree(cats, c._id)
+      ...c, _id: c._id.toString(), children: buildTree(cats, c._id)
     }));
   };
   return buildTree(categories, null);
@@ -156,14 +120,12 @@ export async function getCategories() {
 
 // --- PRODUCTS ---
 export async function getProductById(id) {
+  if (!isValidObjectId(id)) return null;
   await connectDB();
   try {
     let product = await Product.findById(id).populate('category').populate('tags').lean();
     if (!product) return null;
-    
-    // Check Offer
     product = await checkAndResetOffer(product);
-
     return JSON.parse(JSON.stringify(product));
   } catch (error) { return null; }
 }
@@ -179,165 +141,157 @@ export async function getProductHierarchy() {
 }
 
 export async function getAdminProducts() {
+  try { await assertAdmin(); } catch { return []; }
   await connectDB();
   const productsRaw = await Product.find().sort({ createdAt: -1 }).populate('category', 'name').populate('tags', 'name color').lean();
   return JSON.parse(JSON.stringify(productsRaw));
 }
 
 export async function updateProductTags(productId, tags) {
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
+  if (!isValidObjectId(productId)) return { error: 'Invalid ID' };
+  if (!Array.isArray(tags) || tags.some(t => !isValidObjectId(t))) return { error: 'Invalid tag IDs' };
   await connectDB();
   try {
-    await Product.findByIdAndUpdate(productId, { tags: tags });
+    await Product.findByIdAndUpdate(productId, { tags });
     revalidatePath('/admin/products');
     return { success: true };
-  } catch (error) { return { error: "Failed to update tags" }; }
+  } catch (error) { return { error: 'Failed to update tags' }; }
 }
 
-// --- CORE PRODUCT LOGIC ---
-
 export async function createProduct(formData) {
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
   await connectDB();
   try {
-    const name = formData.get('name');
-    const description = formData.get('description');
-    
-    // VALIDATION: Check Category explicitly
+    const name = sanitizeString(formData.get('name'), 200);
+    if (!name) return { error: 'Product name is required' };
+
+    const description = sanitizeString(formData.get('description'), 5000);
     const category = formData.get('category');
-    if (!category || category === "") {
-      return { error: "Category is required." };
-    }
+    if (!category || !isValidObjectId(category)) return { error: 'Valid category is required' };
 
     const price = parseFloat(formData.get('price'));
-    
-    // Inventory Handling
-    const variantsJson = formData.get('variants');
-    const variants = variantsJson ? JSON.parse(variantsJson) : [];
-    
-    // Calculate total stock (sum of all variant stocks)
-    const totalStock = variants.length > 0 
-      ? variants.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0)
-      : parseInt(formData.get('stock') || 0);
+    if (isNaN(price) || price < 0) return { error: 'Valid price is required' };
 
-    // SANITIZATION: Handle empty strings for ObjectIds and Dates
-    // This prevents "CastError" when form sends "" for optional fields
+    let variants = [];
+    const variantsJson = formData.get('variants');
+    if (variantsJson) {
+      try { variants = JSON.parse(variantsJson); } catch { return { error: 'Invalid variants data' }; }
+      if (!Array.isArray(variants)) return { error: 'Variants must be an array' };
+    }
+
+    const totalStock = variants.length > 0
+      ? variants.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0)
+      : Math.max(0, parseInt(formData.get('stock') || 0));
+
     const sizeGuideRaw = formData.get('sizeGuide');
-    const sizeGuide = (sizeGuideRaw && sizeGuideRaw !== "") ? sizeGuideRaw : undefined;
+    const sizeGuide = (sizeGuideRaw && isValidObjectId(sizeGuideRaw)) ? sizeGuideRaw : undefined;
 
     const discountPriceRaw = formData.get('discountPrice');
-    const discountPrice = (discountPriceRaw && discountPriceRaw !== "") ? parseFloat(discountPriceRaw) : null;
+    const discountPrice = discountPriceRaw ? parseFloat(discountPriceRaw) : null;
+    if (discountPrice !== null && (isNaN(discountPrice) || discountPrice < 0 || discountPrice >= price)) {
+      return { error: 'Discount price must be positive and less than price' };
+    }
 
     const startDateRaw = formData.get('saleStartDate');
-    const saleStartDate = (startDateRaw && startDateRaw !== "") ? new Date(startDateRaw) : null;
-
+    const saleStartDate = startDateRaw ? new Date(startDateRaw) : null;
     const endDateRaw = formData.get('saleEndDate');
-    const saleEndDate = (endDateRaw && endDateRaw !== "") ? new Date(endDateRaw) : null;
+    const saleEndDate = endDateRaw ? new Date(endDateRaw) : null;
 
-    // Handle Auto-Gen or Manual Input
-    let sku = formData.get('sku');
-    if (sku === 'AUTO' || !sku || sku === "") sku = generateCode('SKU');
-    
-    let barcode = formData.get('barcode');
-    if (barcode === 'AUTO' || !barcode || barcode === "") barcode = generateCode('BAR');
+    let sku = sanitizeString(formData.get('sku'), 50);
+    if (sku === 'AUTO' || !sku) sku = generateCode('SKU');
 
-    const tags = formData.getAll('tags');
-    const images = formData.getAll('images'); 
+    let barcode = sanitizeString(formData.get('barcode'), 50);
+    if (barcode === 'AUTO' || !barcode) barcode = generateCode('BAR');
+
+    const tags = formData.getAll('tags').filter(t => isValidObjectId(t));
+    const images = formData.getAll('images');
     const imagePaths = [];
 
     for (const file of images) {
       if (file.size > 0) {
-        const path = await saveFileToPublic(file);
-        if (path) imagePaths.push(path);
+        const p = await saveFileToPublic(file);
+        if (p) imagePaths.push(p);
       }
     }
 
-    const slug = generateSlug(name) + '-' + Date.now(); 
+    const slug = generateSlug(name) + '-' + crypto.randomUUID().slice(0, 8);
 
     await Product.create({
-      name, slug, sku, barcode, description, price, 
+      name, slug, sku, barcode, description, price,
       discountPrice, saleStartDate, saleEndDate,
-      category, 
-      stock: totalStock,
-      variants,
-      sizeGuide, 
-      tags, 
-      images: imagePaths 
+      category, stock: totalStock, variants, sizeGuide, tags,
+      images: imagePaths
     });
 
-    revalidatePath('/admin/products'); 
-    revalidatePath('/product'); 
+    revalidatePath('/admin/products');
+    revalidatePath('/product');
     return { success: true };
   } catch (error) {
-    if (error.code === 11000) return { error: "SKU or Barcode already exists." };
-    console.error("Create Product Error:", error); 
-    // Return explicit error if casting fails
-    if (error.name === 'CastError') return { error: "Invalid data format (Category or ID)." };
-    return { error: "Failed to create product" };
+    if (error.code === 11000) return { error: 'SKU or Barcode already exists.' };
+    if (error.name === 'CastError') return { error: 'Invalid data format.' };
+    console.error('Create Product Error:', error);
+    return { error: 'Failed to create product' };
   }
 }
 
 export async function updateProduct(formData) {
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
   await connectDB();
   try {
     const id = formData.get('id');
-    const product = await Product.findById(id);
-    if (!product) return { error: "Product not found" };
+    if (!isValidObjectId(id)) return { error: 'Invalid product ID' };
 
-    // 1. Basic Fields
-    product.name = formData.get('name');
-    product.description = formData.get('description');
-    product.price = parseFloat(formData.get('price'));
-    product.category = formData.get('category');
-    
-    // 2. Inventory Logic
+    const product = await Product.findById(id);
+    if (!product) return { error: 'Product not found' };
+
+    const name = sanitizeString(formData.get('name'), 200);
+    if (!name) return { error: 'Product name is required' };
+
+    product.name = name;
+    product.description = sanitizeString(formData.get('description'), 5000);
+
+    const price = parseFloat(formData.get('price'));
+    if (isNaN(price) || price < 0) return { error: 'Valid price is required' };
+    product.price = price;
+
+    const category = formData.get('category');
+    if (!isValidObjectId(category)) return { error: 'Valid category is required' };
+    product.category = category;
+
     const variantsJson = formData.get('variants');
     if (variantsJson) {
-        const parsedVariants = JSON.parse(variantsJson);
-        product.variants = parsedVariants;
-        // Automatically sum up stock from the variants
-        product.stock = parsedVariants.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0);
+      let parsed;
+      try { parsed = JSON.parse(variantsJson); } catch { return { error: 'Invalid variants data' }; }
+      if (!Array.isArray(parsed)) return { error: 'Variants must be an array' };
+      product.variants = parsed;
+      product.stock = parsed.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0);
     } else {
-        // Legacy fallback
-        product.stock = parseInt(formData.get('stock') || product.stock);
+      product.stock = Math.max(0, parseInt(formData.get('stock') || product.stock));
     }
 
-    // 3. Size Guide
     const sizeGuide = formData.get('sizeGuide');
-    if (sizeGuide && sizeGuide.length > 0) {
-        product.sizeGuide = sizeGuide;
-    } else {
-        product.sizeGuide = undefined; // Unset if empty
-    }
-    
-    // 4. SKU & Barcode Logic
-    const sku = formData.get('sku');
-    if (sku === 'AUTO') {
-        product.sku = generateCode('SKU');
-    } else if (sku && sku.trim() !== '') {
-        product.sku = sku;
-    }
+    product.sizeGuide = (sizeGuide && isValidObjectId(sizeGuide)) ? sizeGuide : undefined;
 
-    const barcode = formData.get('barcode');
-    if (barcode === 'AUTO') {
-        product.barcode = generateCode('BAR');
-    } else if (barcode && barcode.trim() !== '') {
-        product.barcode = barcode;
-    }
+    const sku = sanitizeString(formData.get('sku'), 50);
+    if (sku === 'AUTO') product.sku = generateCode('SKU');
+    else if (sku) product.sku = sku;
 
-    // 5. Offers (Sanitize)
+    const barcode = sanitizeString(formData.get('barcode'), 50);
+    if (barcode === 'AUTO') product.barcode = generateCode('BAR');
+    else if (barcode) product.barcode = barcode;
+
     const discountPriceRaw = formData.get('discountPrice');
-    product.discountPrice = (discountPriceRaw && discountPriceRaw !== "") ? parseFloat(discountPriceRaw) : null;
+    product.discountPrice = discountPriceRaw ? parseFloat(discountPriceRaw) : null;
 
     const startDateRaw = formData.get('saleStartDate');
-    product.saleStartDate = (startDateRaw && startDateRaw !== "") ? new Date(startDateRaw) : null;
-
+    product.saleStartDate = startDateRaw ? new Date(startDateRaw) : null;
     const endDateRaw = formData.get('saleEndDate');
-    product.saleEndDate = (endDateRaw && endDateRaw !== "") ? new Date(endDateRaw) : null;
+    product.saleEndDate = endDateRaw ? new Date(endDateRaw) : null;
 
-    // 6. Tags
-    product.tags = formData.getAll('tags');
+    product.tags = formData.getAll('tags').filter(t => isValidObjectId(t));
 
-    // 7. Images
-    const keptImages = formData.getAll('keptImages'); 
+    const keptImages = formData.getAll('keptImages').filter(img => typeof img === 'string' && img.startsWith('/uploads/'));
     const imagesToDelete = product.images.filter(img => !keptImages.includes(img));
     for (const imgPath of imagesToDelete) await deleteFileFromPublic(imgPath);
 
@@ -345,49 +299,50 @@ export async function updateProduct(formData) {
     const newPaths = [];
     for (const file of newFiles) {
       if (file.size > 0) {
-        const path = await saveFileToPublic(file);
-        if (path) newPaths.push(path);
+        const p = await saveFileToPublic(file);
+        if (p) newPaths.push(p);
       }
     }
     product.images = [...keptImages, ...newPaths];
 
     await product.save();
-    revalidatePath('/admin/products'); 
+    revalidatePath('/admin/products');
     revalidatePath(`/product/${product.slug}`);
-    
     return { success: true };
   } catch (error) {
-    if (error.code === 11000) return { error: "SKU or Barcode already exists." };
-    console.error("Update Product Error:", error);
-    return { error: "Failed to update product" };
+    if (error.code === 11000) return { error: 'SKU or Barcode already exists.' };
+    console.error('Update Product Error:', error);
+    return { error: 'Failed to update product' };
   }
 }
 
 export async function deleteProduct(id) {
+  try { await assertAdmin(); } catch { return { error: 'Unauthorized' }; }
+  if (!isValidObjectId(id)) return { error: 'Invalid ID' };
   await connectDB();
   try {
     const product = await Product.findById(id);
-    if(product.images) for(const img of product.images) await deleteFileFromPublic(img);
+    if (!product) return { error: 'Product not found' };
+    if (product.images) for (const img of product.images) await deleteFileFromPublic(img);
     await Product.findByIdAndDelete(id);
     revalidatePath('/admin/products');
     return { success: true };
-  } catch (error) { return { error: "Failed to delete" }; }
+  } catch (error) { return { error: 'Failed to delete' }; }
 }
 
 export async function getProductBySlug(slug) {
+  if (!slug || typeof slug !== 'string') return null;
+  const safeSlug = sanitizeString(slug, 200);
   await connectDB();
   try {
-    let productRaw = await Product.findOneAndUpdate({ slug }, { $inc: { views: 1 } }, { new: true })
-      .populate('category')
-      .populate('tags')
-      .populate('sizeGuide') 
-      .lean();
-      
+    let productRaw = await Product.findOneAndUpdate(
+      { slug: safeSlug },
+      { $inc: { views: 1 } },
+      { new: true }
+    ).populate('category').populate('tags').populate('sizeGuide').lean();
+
     if (!productRaw) return null;
-
-    // Check Offer Expiry
     productRaw = await checkAndResetOffer(productRaw);
-
     return JSON.parse(JSON.stringify(productRaw));
   } catch (error) { return null; }
 }
@@ -398,21 +353,16 @@ export async function getAllProducts() {
     .populate('category', 'name slug')
     .populate('tags', 'name')
     .lean();
-  
-  // Check Offers in Bulk
   productsRaw = await Promise.all(productsRaw.map(checkAndResetOffer));
-
   return JSON.parse(JSON.stringify(productsRaw));
 }
 
 export async function getRelatedProducts(categoryId, currentProductId) {
+  if (!isValidObjectId(categoryId) || !isValidObjectId(currentProductId)) return [];
   await connectDB();
   try {
     let productsRaw = await Product.find({ category: categoryId, _id: { $ne: currentProductId } }).limit(4).lean();
-    
-    // Check Offers
     productsRaw = await Promise.all(productsRaw.map(checkAndResetOffer));
-
     return JSON.parse(JSON.stringify(productsRaw));
   } catch (error) { return []; }
 }

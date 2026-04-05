@@ -234,8 +234,9 @@ function LoginContent() {
                 <Image 
                   src="/logo.png" 
                   alt="OURA" 
-                  fill 
-                  className="object-contain" 
+                  fill
+                  sizes="160px"
+                  className="object-contain"
                   style={{ filter: maroonFilter }} // Applies Maroon Tint
                   priority 
                 />

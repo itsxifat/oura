@@ -4,6 +4,15 @@ import { getAllProducts } from '@/app/actions';
 import Navbar from '@/components/Navbar';
 import ProductListing from '@/components/ProductListing';
 
+export const metadata = {
+  title: 'Shop All',
+  description: 'Shop all premium clothing and accessories at OURA. Explore our full collection of luxury fashion.',
+  openGraph: {
+    title: 'Shop All | OURA',
+    description: 'Shop all premium clothing and accessories at OURA.',
+  },
+};
+
 export const dynamic = 'force-dynamic';
 
 export default async function ProductsPage() {
