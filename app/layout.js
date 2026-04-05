@@ -7,6 +7,11 @@ import { Toaster } from 'react-hot-toast'; // ✅ Import the Toaster
 
 export const metadata = {
   metadataBase: new URL('https://oura-lifestyle.com'),
+  icons: {
+    icon: '/Icon1.png',
+    shortcut: '/Icon1.png',
+    apple: '/Icon1.png',
+  },
   title: {
     default: 'OURA — Engineered for the Modern Aesthetic',
     template: '%s | OURA',
