@@ -4,7 +4,8 @@ import { CartProvider } from '@/lib/context/CartContext';
 import SessionProvider from '@/components/SessionProvider';
 import FooterWrapper from '@/components/FooterWrapper';
 import VisitTracker from '@/components/VisitTracker';
-import { Toaster } from 'react-hot-toast'; // ✅ Import the Toaster
+import { Toaster } from 'react-hot-toast';
+import Script from 'next/script';
 
 export const metadata = {
   metadataBase: new URL('https://oura-lifestyle.com'),
@@ -82,6 +83,24 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body className="antialiased">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
+        {/* Meta Pixel */}
+        <Script id="meta-pixel" strategy="afterInteractive">
+          {`!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '1729499928014314');
+fbq('track', 'PageView');`}
+        </Script>
+        <noscript>
+          <img height="1" width="1" style={{ display: 'none' }}
+            src="https://www.facebook.com/tr?id=1729499928014314&ev=PageView&noscript=1"
+          />
+        </noscript>
         <SessionProvider>
           <CartProvider>
             <Toaster position="top-right" reverseOrder={false} />
