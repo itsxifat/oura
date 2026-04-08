@@ -4,9 +4,10 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Star, Minus, Plus, ChevronRight, ShoppingBag, X, Ruler, ZoomIn, Check, AlertCircle, ChevronDown, ChevronUp, ChevronLeft, ArrowRight, Loader2 } from 'lucide-react';
-import { useCart } from '@/lib/context/CartContext'; 
-import Image from 'next/image'; 
+import { useCart } from '@/lib/context/CartContext';
+import Image from 'next/image';
 import gsap from 'gsap';
+import { trackEvent } from '@/lib/pixel';
 
 // --- HELPERS ---
 const cleanName = (name) => {
@@ -292,6 +293,17 @@ export default function ProductDetails({ product, orderCount = 0 }) {
     return () => ctx.revert();
   }, []);
 
+  // Fire ViewContent pixel on mount (complements server-side CAPI call)
+  useEffect(() => {
+    trackEvent('ViewContent', {
+      content_ids:  [product._id],
+      content_name: product.name,
+      content_type: 'product',
+      value:        product.discountPrice || product.price,
+      currency:     'BDT',
+    });
+  }, [product._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const showToast = (msg, type = 'success') => {
       setToast({ msg, type });
       setTimeout(() => setToast(null), 3000);
@@ -327,6 +339,13 @@ export default function ProductDetails({ product, orderCount = 0 }) {
     addToCart(product, quantity, selectedSize);
     showToast("Added to bag", "success");
     setTimeout(() => setIsAdding(false), 600);
+    trackEvent('AddToCart', {
+      content_ids:  [product._id],
+      content_name: product.name,
+      content_type: 'product',
+      value:        (product.discountPrice || product.price) * quantity,
+      currency:     'BDT',
+    });
   };
 
   const handleBuyNow = () => {

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useCart } from '@/lib/context/CartContext'; 
+import { useCart } from '@/lib/context/CartContext';
 import { ShoppingBag, Heart, Star, MessageCircle, Facebook, Check, Truck, ShieldCheck } from 'lucide-react';
+import { trackEvent } from '@/lib/pixel';
 import { motion } from 'framer-motion';
 
 export default function ProductInfo({ product }) {
@@ -25,11 +26,36 @@ export default function ProductInfo({ product }) {
   const handleAddToCart = () => {
     setLoading(true);
     setTimeout(() => {
-      addToCart(product, 1); 
+      addToCart(product, 1);
       setLoading(false);
       setAdded(true);
       setTimeout(() => setAdded(false), 2000);
     }, 600);
+    trackEvent('AddToCart', {
+      content_ids:  [product._id],
+      content_name: product.name,
+      content_type: 'product',
+      value:        currentPrice,
+      currency:     'BDT',
+    });
+  };
+
+  const handleWishlist = () => {
+    const next = !isWishlisted;
+    setIsWishlisted(next);
+    if (next) {
+      trackEvent('AddToWishlist', {
+        content_ids:  [product._id],
+        content_name: product.name,
+        content_type: 'product',
+        value:        currentPrice,
+        currency:     'BDT',
+      });
+    }
+  };
+
+  const handleContact = (channel) => {
+    trackEvent('Contact', { content_name: product.name, content_category: channel });
   };
 
   return (
@@ -96,8 +122,8 @@ export default function ProductInfo({ product }) {
           {product.stock === 0 ? 'Sold Out' : added ? <><Check size={18}/> Added</> : <><ShoppingBag size={18}/> Add to Cart</>}
         </button>
         
-        <button 
-          onClick={() => setIsWishlisted(!isWishlisted)}
+        <button
+          onClick={handleWishlist}
           className={`p-4 border ${isWishlisted ? 'border-red-200 bg-red-50 text-red-500' : 'border-gray-200 text-gray-400 hover:border-black hover:text-black'} transition-all`}
         >
           <Heart size={20} fill={isWishlisted ? "currentColor" : "none"} />
@@ -108,10 +134,10 @@ export default function ProductInfo({ product }) {
       <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 mt-8">
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Have questions? Chat with us</p>
         <div className="flex gap-3">
-          <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#25D366] text-white rounded-lg text-xs font-bold uppercase hover:bg-[#20bd5a] transition shadow-sm hover:shadow-md">
+          <a href={whatsappLink} target="_blank" rel="noopener noreferrer" onClick={() => handleContact('whatsapp')} className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#25D366] text-white rounded-lg text-xs font-bold uppercase hover:bg-[#20bd5a] transition shadow-sm hover:shadow-md">
             <MessageCircle size={16} /> WhatsApp
           </a>
-          <a href={messengerLink} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#0084FF] text-white rounded-lg text-xs font-bold uppercase hover:bg-[#0078e7] transition shadow-sm hover:shadow-md">
+          <a href={messengerLink} target="_blank" rel="noopener noreferrer" onClick={() => handleContact('messenger')} className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#0084FF] text-white rounded-lg text-xs font-bold uppercase hover:bg-[#0078e7] transition shadow-sm hover:shadow-md">
             <Facebook size={16} /> Messenger
           </a>
         </div>

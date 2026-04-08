@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useCart } from '@/lib/context/CartContext';
 import Link from 'next/link';
+import { trackEvent } from '@/lib/pixel';
 import Image from 'next/image'; 
 import { Minus, Plus, X, ArrowRight, ShoppingBag, Ticket, Zap, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -345,8 +346,16 @@ export default function CartClient() {
               </div>
 
               {/* ACTIONS */}
-              <Link href="/checkout" className="group block w-full bg-[#B91C1C] text-white text-center py-4 text-[11px] font-black uppercase tracking-[0.25em] hover:bg-black transition-colors shadow-lg">
-                 Secure Checkout <ArrowRight size={14} className="inline ml-2 mb-0.5 group-hover:translate-x-1 transition-transform" />
+              <Link
+                href="/checkout"
+                onClick={() => trackEvent('InitiateCheckout', {
+                  num_items: cart.length,
+                  value:     localGrandTotal,
+                  currency:  'BDT',
+                })}
+                className="group block w-full bg-[#B91C1C] text-white text-center py-4 text-[11px] font-black uppercase tracking-[0.25em] hover:bg-black transition-colors shadow-lg"
+              >
+                Secure Checkout <ArrowRight size={14} className="inline ml-2 mb-0.5 group-hover:translate-x-1 transition-transform" />
               </Link>
               
               <div className="mt-4 text-center">

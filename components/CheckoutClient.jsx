@@ -51,6 +51,7 @@ function getOrCreateDeviceId() {
 }
 import Link from 'next/link';
 import Image from 'next/image';
+import { trackEvent } from '@/lib/pixel';
 import {
   ArrowLeft, Truck, CreditCard, CheckCircle, Loader2,
   AlertTriangle, Check, ShoppingBag, LogIn, X, Clock, ChevronRight,
@@ -488,6 +489,17 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
       data = { ...form };
     }
 
+    // AddPaymentInfo — fires when user submits checkout with payment details
+    trackEvent('AddPaymentInfo', {}, {
+      email:      data.email      || undefined,
+      phone:      data.phone      || undefined,
+      firstName:  data.firstName  || undefined,
+      lastName:   data.lastName   || undefined,
+      city:       data.city       || undefined,
+      postalCode: data.postalCode || undefined,
+      country:    'BD',
+    });
+
     const orderPayload = {
       guestInfo: {
         firstName:  data.firstName   || '',
@@ -585,6 +597,18 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
 
     clearCart();
     try { localStorage.removeItem(CHECKOUT_STORAGE_KEY); } catch { /* non-fatal */ }
+
+    // Purchase event
+    trackEvent('Purchase', {
+      value:    total,
+      currency: 'BDT',
+    }, {
+      email:     data.email     || undefined,
+      phone:     data.phone     || undefined,
+      firstName: data.firstName || undefined,
+      lastName:  data.lastName  || undefined,
+      country:   'BD',
+    });
 
     if (res.isGuest) {
       setGuestDone({ email: res.guestEmail, phone: res.guestPhone });

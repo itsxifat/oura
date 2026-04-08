@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { searchProducts, logSearch, getTrendingSearches } from "@/actions/search";
+import { trackEvent } from "@/lib/pixel";
 
 // ─── local recent searches (localStorage) ────────────────────────────────────
 const RECENT_KEY = "oura_recent_searches";
@@ -242,6 +243,7 @@ export default function SearchModal({ isOpen, onClose }) {
   function handleSubmit(e) {
     e.preventDefault();
     if (!query.trim()) return;
+    trackEvent('Search', { search_string: query.trim() });
     navigateTo(`/products?search=${encodeURIComponent(query.trim())}`);
   }
 
