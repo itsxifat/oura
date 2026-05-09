@@ -1,7 +1,7 @@
 'use client';
 
 import { useCart } from '@/lib/context/CartContext';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createOrder, initiateOnlinePayment, saveAddress } from '@/app/actions';
 
@@ -51,7 +51,6 @@ function getOrCreateDeviceId() {
 }
 import Link from 'next/link';
 import Image from 'next/image';
-import { trackEvent } from '@/lib/pixel';
 import { trackBeginCheckout, trackPurchase } from '@/lib/gtm';
 import {
   ArrowLeft, Truck, CreditCard, CheckCircle, Loader2,
@@ -364,20 +363,6 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
   const [deviceId, setDeviceId] = useState('');
   useEffect(() => { setDeviceId(getOrCreateDeviceId()); }, []);
 
-  /* ── GTM: begin_checkout fires once when cart is confirmed present ── */
-  const checkoutTrackedRef = useRef(false);
-  useEffect(() => {
-    if (cart.length > 0 && !checkoutTrackedRef.current) {
-      checkoutTrackedRef.current = true;
-      trackBeginCheckout(
-        cart.map(item => {
-          const p = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
-          return { id: item._id, name: item.name, price: p, quantity: item.quantity };
-        }),
-        total
-      );
-    }
-  }, [cart, total]);
 
   /* ── ui state ── */
   const [loading,          setLoading]          = useState(false);
@@ -505,17 +490,6 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
       data = { ...form };
     }
 
-    // AddPaymentInfo — fires when user submits checkout with payment details
-    trackEvent('AddPaymentInfo', {}, {
-      email:      data.email      || undefined,
-      phone:      data.phone      || undefined,
-      firstName:  data.firstName  || undefined,
-      lastName:   data.lastName   || undefined,
-      city:       data.city       || undefined,
-      postalCode: data.postalCode || undefined,
-      country:    'BD',
-    });
-
     const orderPayload = {
       guestInfo: {
         firstName:  data.firstName   || '',
@@ -614,17 +588,6 @@ export default function CheckoutClient({ savedAddresses = [], sessionUser = null
     clearCart();
     try { localStorage.removeItem(CHECKOUT_STORAGE_KEY); } catch { /* non-fatal */ }
 
-    // Purchase event
-    trackEvent('Purchase', {
-      value:    total,
-      currency: 'BDT',
-    }, {
-      email:     data.email     || undefined,
-      phone:     data.phone     || undefined,
-      firstName: data.firstName || undefined,
-      lastName:  data.lastName  || undefined,
-      country:   'BD',
-    });
     trackPurchase(
       res.orderId,
       orderPayload.items.map(i => ({ id: i.product, name: i.name, price: i.price, quantity: i.quantity })),

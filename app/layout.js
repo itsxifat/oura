@@ -1,11 +1,12 @@
 import './globals.css';
+import { Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import { CartProvider } from '@/lib/context/CartContext';
 import SessionProvider from '@/components/SessionProvider';
 import FooterWrapper from '@/components/FooterWrapper';
 import VisitTracker from '@/components/VisitTracker';
+import GTMPageView from '@/components/GTMPageView';
 import { Toaster } from 'react-hot-toast';
-import Script from 'next/script';
 import { GoogleTagManager } from '@next/third-parties/google';
 
 export const metadata = {
@@ -84,21 +85,13 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body className="antialiased">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
-        {/* Meta Pixel — stub runs before hydration so window.fbq is always defined */}
-        <Script id="meta-pixel-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html:
-          `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','4450570391884533');fbq('track','PageView');`
-        }} />
-        {/* fbevents.js loads async and replays the queued init + PageView */}
-        <Script id="meta-pixel-fbevents" strategy="afterInteractive" src="https://connect.facebook.net/en_US/fbevents.js" />
-        <noscript>
-          <img height="1" width="1" style={{ display: 'none' }}
-            src="https://www.facebook.com/tr?id=4450570391884533&ev=PageView&noscript=1"
-          />
-        </noscript>
         <SessionProvider>
           <CartProvider>
             <Toaster position="top-right" reverseOrder={false} />
             <VisitTracker />
+            <Suspense fallback={null}>
+              <GTMPageView />
+            </Suspense>
             <main>
               {children}
             </main>

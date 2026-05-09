@@ -39,13 +39,13 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              // GTM web container, GA4, sGTM proxy, Meta Pixel
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://gtm.oura-lifestyle.com https://connect.facebook.net",
+              // GTM web container, GA4, sGTM proxy
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://gtm.oura-lifestyle.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https:",
-              // GA4 collection endpoints, sGTM proxy, Meta Pixel events
-              "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://gtm.oura-lifestyle.com https://www.facebook.com https://graph.facebook.com",
+              // GA4 collection endpoints, sGTM proxy
+              "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://gtm.oura-lifestyle.com",
               "frame-ancestors 'self'",
             ].join('; '),
           },

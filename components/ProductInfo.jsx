@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useCart } from '@/lib/context/CartContext';
 import { ShoppingBag, Heart, Star, MessageCircle, Facebook, Check, Truck, ShieldCheck } from 'lucide-react';
-import { trackEvent } from '@/lib/pixel';
+import { trackAddToCart, trackAddToWishlist } from '@/lib/gtm';
 import { motion } from 'framer-motion';
 
 export default function ProductInfo({ product }) {
@@ -31,32 +31,18 @@ export default function ProductInfo({ product }) {
       setAdded(true);
       setTimeout(() => setAdded(false), 2000);
     }, 600);
-    trackEvent('AddToCart', {
-      content_ids:  [product._id],
-      content_name: product.name,
-      content_type: 'product',
-      value:        currentPrice,
-      currency:     'BDT',
-    });
+    trackAddToCart({ id: product._id, name: product.name, category: '', price: currentPrice });
   };
 
   const handleWishlist = () => {
     const next = !isWishlisted;
     setIsWishlisted(next);
     if (next) {
-      trackEvent('AddToWishlist', {
-        content_ids:  [product._id],
-        content_name: product.name,
-        content_type: 'product',
-        value:        currentPrice,
-        currency:     'BDT',
-      });
+      trackAddToWishlist({ id: product._id, name: product.name, price: currentPrice });
     }
   };
 
-  const handleContact = (channel) => {
-    trackEvent('Contact', { content_name: product.name, content_category: channel });
-  };
+  const handleContact = (_channel) => {};
 
   return (
     <div className="font-manrope space-y-8 sticky top-32">

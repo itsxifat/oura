@@ -18,7 +18,6 @@ import Tag from '@/models/Tag'; // <-- You missed this one!
 import Navbar from '@/components/Navbar';
 import ProductDetails from '@/components/ProductDetails';
 import RecommendedSection from '@/components/RecommendedSection';
-import { sendCapiEvent } from '@/lib/meta-capi';
 
 // Force dynamic rendering to handle inventory updates instantly
 export const dynamic = 'force-dynamic';
@@ -118,20 +117,6 @@ export default async function ProductPage({ params }) {
 
   // 4. Serialize Data
   const serializedProduct = JSON.parse(JSON.stringify(product));
-
-  // 5. Server-side ViewContent CAPI event
-  const productUrl = `https://oura-lifestyle.com/product/${serializedProduct.slug}`;
-  sendCapiEvent({
-    eventName:      'ViewContent',
-    eventSourceUrl: productUrl,
-    customData: {
-      content_ids:  [serializedProduct._id],
-      content_name: serializedProduct.name,
-      content_type: 'product',
-      value:        serializedProduct.discountPrice || serializedProduct.price,
-      currency:     'BDT',
-    },
-  }).catch(() => { /* non-fatal */ });
 
   const base = 'https://oura-lifestyle.com';
   const price = serializedProduct.discountPrice || serializedProduct.price;
