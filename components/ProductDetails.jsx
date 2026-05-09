@@ -8,6 +8,7 @@ import { useCart } from '@/lib/context/CartContext';
 import Image from 'next/image';
 import gsap from 'gsap';
 import { trackEvent } from '@/lib/pixel';
+import { trackViewItem, trackAddToCart } from '@/lib/gtm';
 
 // --- HELPERS ---
 const cleanName = (name) => {
@@ -302,6 +303,12 @@ export default function ProductDetails({ product, orderCount = 0 }) {
       value:        product.discountPrice || product.price,
       currency:     'BDT',
     });
+    trackViewItem({
+      id:       product._id,
+      name:     product.name,
+      category: product.category?.name || '',
+      price:    product.discountPrice || product.price,
+    });
   }, [product._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showToast = (msg, type = 'success') => {
@@ -346,6 +353,12 @@ export default function ProductDetails({ product, orderCount = 0 }) {
       value:        (product.discountPrice || product.price) * quantity,
       currency:     'BDT',
     });
+    trackAddToCart({
+      id:       product._id,
+      name:     product.name,
+      category: product.category?.name || '',
+      price:    product.discountPrice || product.price,
+    }, quantity);
   };
 
   const handleBuyNow = () => {

@@ -22,6 +22,17 @@ function PaymentSuccessContent() {
   }, []);
 
   useEffect(() => {
+    if (!orderId) return;
+    // Server-side purchase event — looks up the order in MongoDB and forwards to sGTM.
+    // Used for bKash/SSLCommerz flows where the cart is cleared before this page loads.
+    fetch('/api/gtm-track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'purchase', orderId }),
+    }).catch(() => {});
+  }, [orderId]);
+
+  useEffect(() => {
     if (count <= 0) return;
     const t = setTimeout(() => setCount(c => c - 1), 1000);
     return () => clearTimeout(t);

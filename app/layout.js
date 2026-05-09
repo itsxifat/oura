@@ -6,6 +6,7 @@ import FooterWrapper from '@/components/FooterWrapper';
 import VisitTracker from '@/components/VisitTracker';
 import { Toaster } from 'react-hot-toast';
 import Script from 'next/script';
+import { GoogleTagManager } from '@next/third-parties/google';
 
 export const metadata = {
   metadataBase: new URL('https://oura-lifestyle.com'),
@@ -104,6 +105,7 @@ export default function RootLayout({ children }) {
             <FooterWrapper />
           </CartProvider>
         </SessionProvider>
+        <GoogleTagManager gtmId="GTM-K9Q465W8" />
       </body>
     </html>
   );
