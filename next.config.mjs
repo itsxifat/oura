@@ -39,16 +39,37 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              // GTM web container, GA4, sGTM proxy
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://gtm.oura-lifestyle.com",
-              // GTM debug badge CSS
+              // GTM + GA4 + Google Ads + DoubleClick + Meta Pixel + Conversions API client helper
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'" +
+                " https://www.googletagmanager.com https://*.googletagmanager.com" +
+                " https://www.google-analytics.com https://ssl.google-analytics.com" +
+                " https://www.googleadservices.com https://googleads.g.doubleclick.net" +
+                " https://www.google.com" +
+                " https://gtm.oura-lifestyle.com" +
+                " https://connect.facebook.net" +
+                " https://unpkg.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://www.googletagmanager.com",
               "font-src 'self' https://fonts.gstatic.com",
+              // https: wildcard covers all pixel/beacon img requests
               "img-src 'self' data: blob: https:",
-              // GTM script fetches + GA4 collection endpoints + sGTM proxy
-              "connect-src 'self' https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://gtm.oura-lifestyle.com",
-              // GTM preview/debug mode iframes
-              "frame-src 'self' https://www.googletagmanager.com https://*.googletagmanager.com https://gtm.oura-lifestyle.com",
+              // GTM + GA4 + Google Ads + DoubleClick + sGTM proxy + Meta Pixel + Conversions API
+              "connect-src 'self'" +
+                " https://www.googletagmanager.com https://*.googletagmanager.com" +
+                " https://www.google-analytics.com https://ssl.google-analytics.com" +
+                " https://analytics.google.com https://region1.google-analytics.com" +
+                " https://stats.g.doubleclick.net https://cm.g.doubleclick.net" +
+                " https://td.doubleclick.net" +
+                " https://www.googleadservices.com https://googleads.g.doubleclick.net" +
+                " https://adservice.google.com https://www.google.com" +
+                " https://gtm.oura-lifestyle.com" +
+                " https://www.facebook.com https://connect.facebook.net" +
+                " https://unpkg.com",
+              // GTM preview/debug iframes + DoubleClick Floodlight + Meta
+              "frame-src 'self'" +
+                " https://www.googletagmanager.com https://*.googletagmanager.com" +
+                " https://td.doubleclick.net https://bid.g.doubleclick.net" +
+                " https://gtm.oura-lifestyle.com" +
+                " https://www.facebook.com",
               "frame-ancestors 'self'",
             ].join('; '),
           },
